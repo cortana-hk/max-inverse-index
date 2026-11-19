@@ -15,6 +15,7 @@ from bisect import bisect_right
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from tigeropen.tiger_open_config import TigerOpenClientConfig
@@ -448,7 +449,10 @@ def public_registry(config):
         if not name or instance_id in seen:
             raise ValueError('实例名称不能为空且实例 ID 不能重复')
         seen.add(instance_id)
-        public_instances.append({'id': instance_id, 'name': name})
+        public_instance = {'id': instance_id, 'name': name}
+        if instance.get('source', 'tiger') == 'fixture':
+            public_instance['test'] = True
+        public_instances.append(public_instance)
     default_instance = config.get('default_instance')
     if default_instance not in seen:
         raise ValueError('默认实例不存在')
@@ -524,17 +528,52 @@ def _instance_path(value):
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def load_fixture_snapshot(path, cursor):
+    payload = _load_json(Path(path), {})
+    snapshots = payload.get('snapshots', [])
+    if not snapshots:
+        raise ValueError('测试数据源缺少 snapshots')
+    cursor = max(0, int(cursor))
+    index = min(cursor, len(snapshots) - 1)
+    snapshot = snapshots[index]
+    positions = []
+    for item in snapshot.get('positions', []):
+        currency = str(item.get('currency', 'USD')).upper()
+        quantity = item['quantity']
+        price = item['price']
+        positions.append(SimpleNamespace(
+            contract=SimpleNamespace(
+                symbol=item['symbol'], market=item.get('market', 'US'), currency=currency),
+            quantity=quantity,
+            average_cost=item['average_cost'],
+            market_price=price,
+            market_value=quantity * price,
+            unrealized_pnl_percent=None,
+        ))
+    return positions, snapshot['equity'], index + 1
+
+
 def run_instance(instance, args, registry):
     instance_id = instance['id']
     private_dir = PRIVATE_DIR / 'instances' / instance_id
-    tiger_config = args.tiger_config or instance['tiger_config']
     fills_file = args.fills_file or instance['fills_file']
-    trade = create_trade_client(_instance_path(tiger_config))
-    positions, equity = collect_account(trade)
-    observed_at = datetime.now(timezone.utc)
     state = _load_json(private_dir / 'private_state.json', {})
+    source = instance.get('source', 'tiger')
+    if source == 'fixture':
+        positions, equity, fixture_cursor = load_fixture_snapshot(
+            _instance_path(instance['fixture_file']), state.get('fixture_cursor', 0))
+    elif source == 'tiger':
+        tiger_config = args.tiger_config or instance['tiger_config']
+        trade = create_trade_client(_instance_path(tiger_config))
+        positions, equity = collect_account(trade)
+        fixture_cursor = None
+    else:
+        raise ValueError(f'未知实例数据源: {source}')
+    observed_at = datetime.now(timezone.utc)
     flows = _load_json(private_dir / 'cash_flows.json', [])
     next_state, files = advance_state(state, positions, equity, observed_at, flows)
+    if fixture_cursor is not None:
+        next_state['fixture_cursor'] = fixture_cursor
     fill_events = read_fill_events(_instance_path(fills_file))
     if fill_events:
         files['events'] = fill_events

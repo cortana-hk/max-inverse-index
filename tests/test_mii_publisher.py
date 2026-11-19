@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -17,11 +18,13 @@ from publisher.mii_publisher import (
     assert_public_payload_safe,
     collect_account,
     extract_net_liquidation,
+    load_fixture_snapshot,
     load_instances,
     migrate_legacy_state,
     public_registry,
     publish_files,
     read_fill_events,
+    run_instance,
     select_instances,
     session_start,
 )
@@ -293,6 +296,78 @@ class InstanceTests(unittest.TestCase):
         self.assertNotIn('tiger_config', text)
         self.assertNotIn('fills_file', text)
         self.assertNotIn('/private/', text)
+
+    def test_fixture_instances_are_explicitly_marked_as_tests(self):
+        config = self.config()
+        config['instances'][1]['source'] = 'fixture'
+        registry = public_registry(config)
+        self.assertNotIn('test', registry['instances'][0])
+        self.assertTrue(registry['instances'][1]['test'])
+
+    def test_fixture_snapshot_advances_price_and_equity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fixture.json'
+            path.write_text(json.dumps({'snapshots': [
+                {'equity': 20000, 'positions': [{'symbol': 'TESTA', 'quantity': 100, 'average_cost': 90, 'price': 100}]},
+                {'equity': 21000, 'positions': [{'symbol': 'TESTA', 'quantity': 100, 'average_cost': 90, 'price': 105}]},
+            ]}), encoding='utf-8')
+            first_positions, first_equity, first_cursor = load_fixture_snapshot(path, 0)
+            second_positions, second_equity, second_cursor = load_fixture_snapshot(path, first_cursor)
+        self.assertEqual(first_equity, 20000)
+        self.assertEqual(second_equity, 21000)
+        self.assertEqual(second_cursor, 2)
+        self.assertNotEqual(first_positions[0].market_price, second_positions[0].market_price)
+
+    def test_fixture_instance_updates_twice_without_touching_max(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / 'private'
+            repo = root / 'repo'
+            fixture = root / 'fixture.json'
+            fixture.write_text(json.dumps({'snapshots': [
+                {'equity': 20000, 'positions': [{'symbol': 'TESTA', 'quantity': 100, 'average_cost': 90, 'price': 100}]},
+                {'equity': 21000, 'positions': [{'symbol': 'TESTA', 'quantity': 100, 'average_cost': 90, 'price': 105}]},
+            ]}), encoding='utf-8')
+            fills = root / 'fills.jsonl'
+            records = [
+                {'record_type': 'buy_components', 'order_id': 'test-order'},
+                {'record_type': 'fill', 'order_id': 'test-order', 'symbol': 'TESTA', 'price': 100, 'qty': 100, 'time': '2026-01-01T12:00:00'},
+            ]
+            fills.write_text('\n'.join(json.dumps(record) for record in records) + '\n', encoding='utf-8')
+            repo.mkdir()
+            subprocess.run(['git', 'init', '-b', 'main'], cwd=repo, check=True, capture_output=True)
+            subprocess.run(['git', 'config', 'user.name', 'MII Test'], cwd=repo, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'mii@example.invalid'], cwd=repo, check=True)
+            max_latest = repo / 'data' / 'instances' / 'max' / 'latest.json'
+            max_latest.parent.mkdir(parents=True)
+            max_latest.write_text('{"preserve": "max"}', encoding='utf-8')
+            max_state = private / 'instances' / 'max' / 'private_state.json'
+            max_state.parent.mkdir(parents=True)
+            max_state.write_text('{"preserve": "max-state"}', encoding='utf-8')
+            instance = {
+                'id': 'account-2', 'name': '账号2（测试）', 'source': 'fixture',
+                'fixture_file': str(fixture), 'fills_file': str(fills), 'enabled': True,
+            }
+            config = {
+                'default_instance': 'max',
+                'instances': [
+                    {'id': 'max', 'name': 'Max', 'tiger_config': '/max', 'fills_file': '/max/fills'},
+                    instance,
+                ],
+            }
+            args = SimpleNamespace(tiger_config=None, fills_file=None, dry_run=False, no_push=True, repo=str(repo))
+            with patch('publisher.mii_publisher.PRIVATE_DIR', private):
+                run_instance(instance, args, public_registry(config))
+                first = json.loads((repo / 'data' / 'instances' / 'account-2' / 'latest.json').read_text(encoding='utf-8'))
+                run_instance(instance, args, public_registry(config))
+                second = json.loads((repo / 'data' / 'instances' / 'account-2' / 'latest.json').read_text(encoding='utf-8'))
+
+            self.assertNotEqual(first['mii_index'], second['mii_index'])
+            self.assertEqual(len(json.loads((repo / 'data' / 'instances' / 'account-2' / 'history.json').read_text(encoding='utf-8'))), 2)
+            self.assertEqual(json.loads(max_latest.read_text(encoding='utf-8'))['preserve'], 'max')
+            self.assertEqual(json.loads(max_state.read_text(encoding='utf-8'))['preserve'], 'max-state')
+            state = json.loads((private / 'instances' / 'account-2' / 'private_state.json').read_text(encoding='utf-8'))
+            self.assertEqual(state['fixture_cursor'], 2)
 
     def test_legacy_state_is_copied_once_and_never_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:

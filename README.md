@@ -50,6 +50,39 @@ MII 是与 Max 账户收益反向联动的个人指数，支持多个彼此隔�
 
 单个实例采集或发布失败不会阻止其他实例。未启用实例不会进入公开清单。网页通过右上角实例选择器切换，也可使用 `?instance=account-2` 分享指定实例。每个实例独立保存浏览器中的 100 起始日。
 
+## 接入真实 Tiger 账号
+
+真实账号在本地 `private/instances.json` 添加新实例，不要修改或复用 `max` 的状态，也不要把真实账号放进测试实例。建议实例 ID 使用 `account-2-real`，与现有 `account-2` 测试实例区分。
+
+1. 将真实 Tiger 的 `tiger_openapi_config.properties` 和 token 配置放在账号自己的私密目录，例如 `private/accounts/account-2-real/config/`。该目录不会进入 Git。
+2. 准备独立的成交记录路径，例如 `private/accounts/account-2-real/fills.jsonl`。如果现有交易服务已经在写成交记录，`fills_file` 直接指向那个文件；文件不存在时指数和持仓仍可发布，订单时间线为空。
+3. 在 `private/instances.json` 的 `instances` 数组中加入：
+   ```json
+   {
+     "id": "account-2-real",
+     "name": "账号2",
+     "enabled": true,
+     "source": "tiger",
+     "tiger_config": "private/accounts/account-2-real/config",
+     "fills_file": "private/accounts/account-2-real/fills.jsonl"
+   }
+   ```
+4. 暂停 MII 计划任务后执行 dry-run，确认无误再首次发布并恢复任务：
+   ```bat
+   schtasks /End /TN "MII Public Snapshot Publisher"
+   python publisher/mii_publisher.py --dry-run --instance account-2-real
+   python publisher/mii_publisher.py --once --instance account-2-real
+   schtasks /Run /TN "MII Public Snapshot Publisher"
+   ```
+
+`source` 为 `tiger` 时直接通过 Tiger SDK 读取对应配置；凭证内容、账户号和配置路径都不会写入公开实例清单。
+
+## 账号2测试实例
+
+当前 `account-2` 是明确标记的测试实例，不是 Tiger 真实账号。它使用 `private/fixtures/account-2.json` 中依次推进的四组快照，以及独立的 `account-2-fills.jsonl`。每次发布推进一次游标，因此可以验证即时更新；测试数据与真实账号完全不共享状态，fixture 文件也不会进入 Git。
+
+已验证连续两次发布时测试 MII 从 100 变为 95，提交只修改 `data/instances/account-2/` 和公开实例清单；`max` 公开数据及私密状态不变。网页可在 `Max` 与 `账号2（测试）` 之间来回切换。
+
 ## 计算口径
 
 账户区间收益率 `r = 当期单位净值 / 上期单位净值 - 1`，MII 按 `MII(t) = MII(t-1) × (1-r)` 逐区间计算。单位净值通过基金份额法剔除出入金影响。

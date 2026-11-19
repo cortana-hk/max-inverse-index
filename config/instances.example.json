@@ -6,6 +6,7 @@
       "id": "max",
       "name": "Max",
       "enabled": true,
+      "source": "tiger",
       "tiger_config": "../TIGER/config",
       "fills_file": "../TIGER/data/fills.jsonl"
     },
@@ -13,6 +14,7 @@
       "id": "account-2",
       "name": "Account 2",
       "enabled": false,
+      "source": "tiger",
       "tiger_config": "/path/to/account-2/config",
       "fills_file": "/path/to/account-2/fills.jsonl"
     }
