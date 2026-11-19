@@ -120,15 +120,18 @@ function renderHoldings(holdings) {
   });
 }
 
-function renderEvents(events) {
+function renderEvents(events, baseline) {
+  const visibleEvents = baseline
+    ? events.filter((event) => new Date(event.time) >= new Date(baseline.time))
+    : events;
   const list = document.getElementById('events-list');
   list.replaceChildren();
-  document.getElementById('trade-count').textContent = `${events.length} 笔订单`;
-  if (!events.length) {
+  document.getElementById('trade-count').textContent = `${visibleEvents.length} 笔订单`;
+  if (!visibleEvents.length) {
     list.append(element('p', 'placeholder', '暂无成交记录。'));
     return;
   }
-  [...events].reverse().forEach((event, index) => {
+  [...visibleEvents].reverse().forEach((event, index) => {
     const action = ACTION_LABELS[event.action] || '变化';
     const row = element('article', `trade-row${index < 3 ? ' recent' : ''}`);
     row.dataset.action = event.action;
@@ -219,7 +222,7 @@ function renderAll() {
   const baseline = baselinePoint(points);
   renderMetrics(cachedData.latest, baseline);
   renderHoldings(cachedData.latest.holdings);
-  renderEvents(cachedData.events);
+  renderEvents(cachedData.events, baseline);
   renderChart(cachedData.history, baseline);
 }
 
