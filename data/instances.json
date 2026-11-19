@@ -1,15 +1,10 @@
 {
   "schema_version": 1,
-  "default_instance": "max",
+  "default_instance": "test_data",
   "instances": [
     {
-      "id": "max",
-      "name": "Max"
-    },
-    {
-      "id": "account-2",
-      "name": "账号2（测试）",
-      "test": true
+      "id": "test_data",
+      "name": "test_data"
     }
   ]
 }
