@@ -1,114 +1,114 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-19T16:04:47+00:00",
-  "mii_index": 82.946,
-  "total_return_pct": -17.054,
-  "day_return_pct": 0.5276,
+  "generated_at": "2026-11-19T16:05:59+00:00",
+  "mii_index": 82.9713,
+  "total_return_pct": -17.0287,
+  "day_return_pct": 0.5582,
   "holdings": [
     {
       "symbol": "AAPL",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 41.8092,
+      "weight_pct": 41.801,
       "average_cost": 344.3182,
-      "current_price": 349.73,
-      "unrealized_pnl_pct": 1.57
+      "current_price": 349.555,
+      "unrealized_pnl_pct": 1.52
     },
     {
       "symbol": "MA",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 2.5198,
+      "weight_pct": 2.519,
       "average_cost": 667.0834,
-      "current_price": 631.43,
-      "unrealized_pnl_pct": -5.34
+      "current_price": 631.045,
+      "unrealized_pnl_pct": -5.4
     },
     {
       "symbol": "TMO",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.3018,
+      "weight_pct": 1.3005,
       "average_cost": 681.0655,
-      "current_price": 696.92,
-      "unrealized_pnl_pct": 2.33
+      "current_price": 696.0,
+      "unrealized_pnl_pct": 2.19
     },
     {
       "symbol": "V",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.2716,
+      "weight_pct": 1.2704,
       "average_cost": 401.3005,
-      "current_price": 404.7601,
-      "unrealized_pnl_pct": 0.86
+      "current_price": 404.27,
+      "unrealized_pnl_pct": 0.74
     },
     {
       "symbol": "TCOM",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.1749,
+      "weight_pct": 1.1735,
       "average_cost": 43.0619,
-      "current_price": 42.71,
-      "unrealized_pnl_pct": -0.82
+      "current_price": 42.645,
+      "unrealized_pnl_pct": -0.97
     },
     {
       "symbol": "COST",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.0159,
+      "weight_pct": 1.0158,
       "average_cost": 1014.1109,
-      "current_price": 1087.72,
-      "unrealized_pnl_pct": 7.26
+      "current_price": 1087.315,
+      "unrealized_pnl_pct": 7.22
     },
     {
       "symbol": "JNJ",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.0144,
+      "weight_pct": 1.0143,
       "average_cost": 259.8512,
-      "current_price": 265.49,
-      "unrealized_pnl_pct": 2.17
+      "current_price": 265.4,
+      "unrealized_pnl_pct": 2.14
     },
     {
       "symbol": "LMT",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.9248,
+      "weight_pct": 0.9251,
       "average_cost": 546.6018,
-      "current_price": 573.25,
+      "current_price": 573.26,
       "unrealized_pnl_pct": 4.88
     },
     {
       "symbol": "WMT",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.5234,
+      "weight_pct": 0.523,
       "average_cost": 115.8408,
-      "current_price": 125.8,
-      "unrealized_pnl_pct": 8.6
+      "current_price": 125.66,
+      "unrealized_pnl_pct": 8.48
     },
     {
       "symbol": "ABNB",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.3628,
+      "weight_pct": 0.3622,
       "average_cost": 169.9492,
-      "current_price": 178.025,
-      "unrealized_pnl_pct": 4.75
+      "current_price": 177.71,
+      "unrealized_pnl_pct": 4.57
     },
     {
       "symbol": "DHR",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.252,
+      "weight_pct": 0.2517,
       "average_cost": 236.1192,
-      "current_price": 228.3,
-      "unrealized_pnl_pct": -3.31
+      "current_price": 227.95,
+      "unrealized_pnl_pct": -3.46
     },
     {
       "symbol": "GD",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.178,
+      "weight_pct": 0.1781,
       "average_cost": 335.5392,
       "current_price": 349.4,
       "unrealized_pnl_pct": 4.13
@@ -117,28 +117,28 @@
       "symbol": "ONTO",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.1574,
+      "weight_pct": 0.1575,
       "average_cost": 203.7911,
-      "current_price": 206.03,
-      "unrealized_pnl_pct": 1.1
+      "current_price": 206.045,
+      "unrealized_pnl_pct": 1.11
     },
     {
       "symbol": "WDC",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.1307,
+      "weight_pct": 0.1304,
       "average_cost": 310.111,
-      "current_price": 307.95,
-      "unrealized_pnl_pct": -0.7
+      "current_price": 307.164,
+      "unrealized_pnl_pct": -0.95
     },
     {
       "symbol": "CRWD",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.1079,
+      "weight_pct": 0.1075,
       "average_cost": 233.196,
-      "current_price": 254.245,
-      "unrealized_pnl_pct": 9.03
+      "current_price": 253.226,
+      "unrealized_pnl_pct": 8.59
     }
   ]
 }
