@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-19T12:29:00+00:00",
-  "mii_index": 99.9317,
-  "total_return_pct": -0.0683,
+  "generated_at": "2026-11-19T12:30:03+00:00",
+  "mii_index": 99.9332,
+  "total_return_pct": -0.0668,
   "day_return_pct": null,
   "holdings": [
     {
       "symbol": "AAPL",
       "market": "US",
-      "weight_pct": 41.9871,
+      "weight_pct": 41.9876,
       "unrealized_pnl_pct": 2.75
     },
     {
@@ -20,7 +20,7 @@
     {
       "symbol": "V",
       "market": "US",
-      "weight_pct": 1.2924,
+      "weight_pct": 1.2923,
       "unrealized_pnl_pct": 3.26
     },
     {
@@ -44,14 +44,14 @@
     {
       "symbol": "JNJ",
       "market": "US",
-      "weight_pct": 1.0261,
-      "unrealized_pnl_pct": 4.11
+      "weight_pct": 1.0264,
+      "unrealized_pnl_pct": 4.14
     },
     {
       "symbol": "COST",
       "market": "US",
-      "weight_pct": 1.0116,
-      "unrealized_pnl_pct": 7.58
+      "weight_pct": 1.0133,
+      "unrealized_pnl_pct": 7.76
     },
     {
       "symbol": "PYPL",
@@ -68,14 +68,14 @@
     {
       "symbol": "BMY",
       "market": "US",
-      "weight_pct": 0.8548,
+      "weight_pct": 0.8547,
       "unrealized_pnl_pct": -4.51
     },
     {
       "symbol": "WMT",
       "market": "US",
-      "weight_pct": 0.5246,
-      "unrealized_pnl_pct": 9.63
+      "weight_pct": 0.5225,
+      "unrealized_pnl_pct": 9.2
     },
     {
       "symbol": "ABNB",
@@ -116,14 +116,14 @@
     {
       "symbol": "AMAT",
       "market": "US",
-      "weight_pct": 0.1543,
-      "unrealized_pnl_pct": 4.52
+      "weight_pct": 0.1547,
+      "unrealized_pnl_pct": 4.81
     },
     {
       "symbol": "AMD",
       "market": "US",
       "weight_pct": 0.1378,
-      "unrealized_pnl_pct": 6.59
+      "unrealized_pnl_pct": 6.62
     },
     {
       "symbol": "CRWD",
@@ -134,8 +134,8 @@
     {
       "symbol": "STX",
       "market": "US",
-      "weight_pct": 0.0917,
-      "unrealized_pnl_pct": 6.36
+      "weight_pct": 0.0916,
+      "unrealized_pnl_pct": 6.24
     }
   ]
 }
