@@ -17820,5 +17820,19 @@
     "action": "sell",
     "price": 35.87,
     "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:07:46+00:00",
+    "symbol": "JNJ",
+    "action": "sell",
+    "price": 265.1975,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:07:46+00:00",
+    "symbol": "DHR",
+    "action": "sell",
+    "price": 227.91,
+    "currency": "USD"
   }
 ]
