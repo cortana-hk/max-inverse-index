@@ -4,5 +4,11 @@
     "total_return_pct": 0.0,
     "day_return_pct": 0.0,
     "time": "2026-11-19T14:15:06+00:00"
+  },
+  {
+    "mii_index": 95.0,
+    "total_return_pct": -5.0,
+    "day_return_pct": -5.0,
+    "time": "2026-11-19T14:15:09+00:00"
   }
 ]
