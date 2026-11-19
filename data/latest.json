@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-19T13:37:05+00:00",
-  "mii_index": 100.1273,
-  "total_return_pct": 0.1273,
-  "day_return_pct": 0.1273,
+  "generated_at": "2026-11-19T13:38:08+00:00",
+  "mii_index": 100.1213,
+  "total_return_pct": 0.1213,
+  "day_return_pct": 0.1213,
   "holdings": [
     {
       "symbol": "AAPL",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 41.9868,
+      "weight_pct": 41.9927,
       "average_cost": 344.3182,
-      "current_price": 353.5587,
-      "unrealized_pnl_pct": 2.68
+      "current_price": 353.63,
+      "unrealized_pnl_pct": 2.7
     },
     {
       "symbol": "MA",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 2.5331,
+      "weight_pct": 2.5329,
       "average_cost": 667.0834,
       "current_price": 639.0,
       "unrealized_pnl_pct": -4.21
@@ -27,7 +27,7 @@
       "symbol": "V",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.2904,
+      "weight_pct": 1.2903,
       "average_cost": 401.3005,
       "current_price": 413.5,
       "unrealized_pnl_pct": 3.04
@@ -54,7 +54,7 @@
       "symbol": "TCOM",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.1696,
+      "weight_pct": 1.1695,
       "average_cost": 43.0619,
       "current_price": 42.8,
       "unrealized_pnl_pct": -0.61
@@ -63,7 +63,7 @@
       "symbol": "JNJ",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.025,
+      "weight_pct": 1.0249,
       "average_cost": 259.8512,
       "current_price": 270.05,
       "unrealized_pnl_pct": 3.92
@@ -81,19 +81,19 @@
       "symbol": "PYPL",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 1.0109,
+      "weight_pct": 1.0099,
       "average_cost": 60.5994,
-      "current_price": 57.9,
-      "unrealized_pnl_pct": -4.45
+      "current_price": 57.85,
+      "unrealized_pnl_pct": -4.54
     },
     {
       "symbol": "LMT",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.9249,
+      "weight_pct": 0.9236,
       "average_cost": 546.6018,
-      "current_price": 577.16,
-      "unrealized_pnl_pct": 5.59
+      "current_price": 576.4,
+      "unrealized_pnl_pct": 5.45
     },
     {
       "symbol": "BMY",
@@ -108,10 +108,10 @@
       "symbol": "WMT",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.5217,
+      "weight_pct": 0.5215,
       "average_cost": 115.8408,
-      "current_price": 126.23,
-      "unrealized_pnl_pct": 8.97
+      "current_price": 126.19,
+      "unrealized_pnl_pct": 8.93
     },
     {
       "symbol": "ABNB",
@@ -135,7 +135,7 @@
       "symbol": "FORM",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.2481,
+      "weight_pct": 0.248,
       "average_cost": 81.9476,
       "current_price": 86.5,
       "unrealized_pnl_pct": 5.56
@@ -171,19 +171,19 @@
       "symbol": "AMAT",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.1539,
+      "weight_pct": 0.1537,
       "average_cost": 350.156,
-      "current_price": 364.99,
-      "unrealized_pnl_pct": 4.24
+      "current_price": 364.5,
+      "unrealized_pnl_pct": 4.1
     },
     {
       "symbol": "AMD",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.1363,
+      "weight_pct": 0.1362,
       "average_cost": 511.1483,
-      "current_price": 538.49,
-      "unrealized_pnl_pct": 5.35
+      "current_price": 538.25,
+      "unrealized_pnl_pct": 5.3
     },
     {
       "symbol": "CRWD",
@@ -191,17 +191,17 @@
       "currency": "USD",
       "weight_pct": 0.1058,
       "average_cost": 233.196,
-      "current_price": 250.96,
-      "unrealized_pnl_pct": 7.62
+      "current_price": 250.9796,
+      "unrealized_pnl_pct": 7.63
     },
     {
       "symbol": "STX",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 0.0918,
+      "weight_pct": 0.0919,
       "average_cost": 511.47,
-      "current_price": 544.0,
-      "unrealized_pnl_pct": 6.36
+      "current_price": 544.6075,
+      "unrealized_pnl_pct": 6.48
     }
   ]
 }
