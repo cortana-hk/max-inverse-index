@@ -1755,5 +1755,12 @@
     "action": "buy",
     "price": 509.98,
     "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T15:01:24+00:00",
+    "symbol": "BMY",
+    "action": "sell",
+    "price": 58.26,
+    "currency": "USD"
   }
 ]
