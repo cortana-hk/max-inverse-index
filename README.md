@@ -13,7 +13,6 @@ MII 是与账户收益反向联动的个人指数，支持多个互相隔离的�
 - `docs/`：网页、图表、成交时间轴、持仓和实例选择器。
 - `publisher/mii_publisher.py`：采集、计算和发布。
 - `tests/`：计算、安全和实例隔离测试。
-- `config/instances.example.json`：配置模板。
 
 ### 实例资源
 
@@ -21,12 +20,14 @@ MII 是与账户收益反向联动的个人指数，支持多个互相隔离的�
 
 | 资源 | 位置 |
 |---|---|
-| 实例清单 | `private/instances.json` |
-| 净值与历史状态 | `private/instances/<实例ID>/private_state.json` |
-| 出入金 | `private/instances/<实例ID>/cash_flows.json` |
-| 公开数据 | `data/instances/<实例ID>/` |
-| Tiger 配置 | 实例的 `tiger_config` 指向的目录 |
-| 成交记录 | 实例的 `fills_file` 指向的文件 |
+| 实例与账号的唯一映射 | `private/instances.json` |
+| 实例净值与历史状态 | `private/instances/<实例ID>/private_state.json` |
+| 实例出入金 | `private/instances/<实例ID>/cash_flows.json` |
+| 实例账号凭证 | `private/instances/<实例ID>/config/`（外部只读配置也可由映射指向） |
+| 实例成交记录 | `private/instances/<实例ID>/fills.jsonl`（或映射到现有文件） |
+| 实例公开数据 | `data/instances/<实例ID>/` |
+
+不再使用 `private/accounts/`。一个实例绑定一个账号，其凭证、成交文件和私密状态都归属同一个实例目录；公开目录只保存脱敏数据。
 
 当前只有 `test_data` 实例。它沿用原账号的只读 Tiger 配置 `../TIGER/config` 和成交记录 `../TIGER/data/fills.jsonl`，历史数据已整体保留并改名。公开数据只保存在 `data/instances/<实例ID>/`，根目录不再生成镜像副本。
 
@@ -34,11 +35,11 @@ MII 是与账户收益反向联动的个人指数，支持多个互相隔离的�
 
 ### 1. 创建独立目录
 
-在 `private/accounts/` 下创建账号目录，例如：
+在 `private/instances/` 下创建账号实例目录，例如：
 
 ```text
-private/accounts/account-2-real/config/
-private/accounts/account-2-real/fills.jsonl
+private/instances/account-2-real/config/
+private/instances/account-2-real/fills.jsonl
 ```
 
 把该账号的 `tiger_openapi_config.properties` 和 token 配置放进 `config/`。`private/` 不会进入 Git。
@@ -53,8 +54,8 @@ private/accounts/account-2-real/fills.jsonl
   "name": "账号2",
   "enabled": true,
   "source": "tiger",
-  "tiger_config": "private/accounts/account-2-real/config",
-  "fills_file": "private/accounts/account-2-real/fills.jsonl"
+  "tiger_config": "private/instances/account-2-real/config",
+  "fills_file": "private/instances/account-2-real/fills.jsonl"
 }
 ```
 
