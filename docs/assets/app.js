@@ -7,7 +7,7 @@ const DISPLAY_ZONE = 'America/New_York';
 const ACTION_LABELS = { buy: '买入', sell: '卖出', new: '新建', increase: '增持', reduce: '减持', close: '清仓' };
 let hasSuccessfulLoad = false;
 let cachedData = null;
-let currentInstance = 'max';
+let currentInstance = 'test_data';
 let loadGeneration = 0;
 
 function element(tag, className, text) {
@@ -245,11 +245,8 @@ function restoreBaseDate() {
 
 async function fetchJson(name, instanceId = currentInstance) {
   const response = await fetch(`${DATA_ROOT}/instances/${instanceId}/${name}.json?t=${Date.now()}`, { cache: 'no-store' });
-  if (response.ok) return response.json();
-  if (instanceId !== 'max' || response.status !== 404) throw new Error(`${name}: HTTP ${response.status}`);
-  const legacy = await fetch(`${DATA_ROOT}/${name}.json?t=${Date.now()}`, { cache: 'no-store' });
-  if (!legacy.ok) throw new Error(`${name}: HTTP ${legacy.status}`);
-  return legacy.json();
+  if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
+  return response.json();
 }
 
 async function fetchRegistry() {
@@ -260,7 +257,7 @@ async function fetchRegistry() {
     if (!Array.isArray(registry.instances) || !registry.instances.length) throw new Error('invalid registry');
     return registry;
   } catch (error) {
-    return { default_instance: 'max', instances: [{ id: 'max', name: 'Max' }] };
+    return { default_instance: 'test_data', instances: [{ id: 'test_data', name: 'test_data' }] };
   }
 }
 

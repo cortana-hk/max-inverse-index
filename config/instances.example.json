@@ -1,22 +1,22 @@
 {
   "schema_version": 1,
-  "default_instance": "max",
+  "default_instance": "test_data",
   "instances": [
     {
-      "id": "max",
-      "name": "Max",
+      "id": "test_data",
+      "name": "test_data",
       "enabled": true,
       "source": "tiger",
       "tiger_config": "../TIGER/config",
       "fills_file": "../TIGER/data/fills.jsonl"
     },
     {
-      "id": "account-2",
-      "name": "Account 2",
+      "id": "account-2-real",
+      "name": "账号2",
       "enabled": false,
       "source": "tiger",
-      "tiger_config": "/path/to/account-2/config",
-      "fills_file": "/path/to/account-2/fills.jsonl"
+      "tiger_config": "private/accounts/account-2-real/config",
+      "fills_file": "private/accounts/account-2-real/fills.jsonl"
     }
   ]
 }

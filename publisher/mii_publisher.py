@@ -7,7 +7,6 @@ import math
 import os
 import re
 import subprocess
-import shutil
 import sys
 import tempfile
 import time
@@ -32,7 +31,7 @@ FORBIDDEN_PUBLIC_KEYS = {
     'equity', 'equity_usd', 'cash', 'net_liquidation', 'account', 'account_id',
     'order', 'order_id', 'tiger_id', 'token', 'private_key', 'units', 'nav',
 }
-INSTANCE_ID_PATTERN = re.compile(r'[a-z0-9][a-z0-9-]*\Z')
+INSTANCE_ID_PATTERN = re.compile(r'[a-z0-9][a-z0-9_-]*\Z')
 SECRET_PATTERNS = (
     re.compile(r'github_pat_[A-Za-z0-9_]+'),
     re.compile(r'ghp_[A-Za-z0-9]+'),
@@ -401,15 +400,15 @@ def _git(repo, *args, check=True):
     return result
 
 
-def publish_files(repo, files, push=True, instance_id='max', registry=None):
+def publish_files(repo, files, push=True, instance_id=None, registry=None):
     """发布单个实例；默认实例保留旧路径兼容，绝不覆盖其他实例。"""
-    if not INSTANCE_ID_PATTERN.fullmatch(instance_id):
+    if not instance_id or not INSTANCE_ID_PATTERN.fullmatch(instance_id):
         raise ValueError('实例 ID 无效')
     repo = Path(repo).resolve()
     assert_public_payload_safe(files)
     for name in PUBLIC_FILENAMES:
         _atomic_json(repo / 'data' / 'instances' / instance_id / f'{name}.json', files[name])
-        if instance_id == 'max':
+        if registry and instance_id == registry['default_instance']:
             _atomic_json(repo / 'data' / f'{name}.json', files[name])
     if registry is not None:
         _atomic_json(repo / 'data' / 'instances.json', registry)
@@ -472,16 +471,6 @@ def select_instances(config, requested=None):
     if not selected:
         raise ValueError(f'实例不存在或未启用: {requested}')
     return selected
-
-
-def migrate_legacy_state(private_root=PRIVATE_DIR):
-    private_root = Path(private_root)
-    for filename in ('private_state.json', 'cash_flows.json'):
-        legacy = private_root / filename
-        migrated = private_root / 'instances' / 'max' / filename
-        if legacy.exists() and not migrated.exists():
-            migrated.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(legacy, migrated)
 
 
 def _load_json(path, default):
@@ -592,7 +581,6 @@ def run_once(args):
     if args.instance is None and (args.tiger_config or args.fills_file):
         raise ValueError('覆盖账号配置时必须同时指定 --instance')
     config = load_instances(Path(args.instances_config))
-    migrate_legacy_state(PRIVATE_DIR)
     selected = select_instances(config, args.instance)
     registry = public_registry(config)
     errors = []

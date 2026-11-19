@@ -20,7 +20,6 @@ from publisher.mii_publisher import (
     extract_net_liquidation,
     load_fixture_snapshot,
     load_instances,
-    migrate_legacy_state,
     public_registry,
     publish_files,
     read_fill_events,
@@ -254,9 +253,9 @@ class AccountAdapterTests(unittest.TestCase):
 class InstanceTests(unittest.TestCase):
     def config(self):
         return {
-            'default_instance': 'max',
+            'default_instance': 'test_data',
             'instances': [
-                {'id': 'max', 'name': 'Max', 'tiger_config': '/private/max', 'fills_file': '/private/max/fills', 'enabled': True},
+                {'id': 'test_data', 'name': 'test_data', 'tiger_config': '/private/max', 'fills_file': '/private/max/fills', 'enabled': True},
                 {'id': 'growth', 'name': 'Growth', 'tiger_config': '/private/growth', 'fills_file': '/private/growth/fills', 'enabled': True},
             ],
         }
@@ -266,19 +265,19 @@ class InstanceTests(unittest.TestCase):
             path = Path(directory) / 'instances.json'
             path.write_text(json.dumps(self.config()), encoding='utf-8')
             config = load_instances(path)
-        self.assertEqual([item['id'] for item in select_instances(config)], ['max', 'growth'])
+        self.assertEqual([item['id'] for item in select_instances(config)], ['test_data', 'growth'])
         self.assertEqual([item['id'] for item in select_instances(config, 'growth')], ['growth'])
         with self.assertRaises(ValueError):
             select_instances(config, 'unknown')
 
     def test_invalid_or_duplicate_instance_ids_are_rejected(self):
-        for instance_id in ('../secret', 'Max Account', 'account_1', ''):
+        for instance_id in ('../secret', 'Max Account', 'account space', ''):
             config = self.config()
             config['instances'][0]['id'] = instance_id
             with self.subTest(instance_id=instance_id), self.assertRaises(ValueError):
                 public_registry(config)
         config = self.config()
-        config['instances'][1]['id'] = 'max'
+        config['instances'][1]['id'] = 'test_data'
         with self.assertRaises(ValueError):
             public_registry(config)
 
@@ -286,12 +285,12 @@ class InstanceTests(unittest.TestCase):
         config = self.config()
         config['instances'][1]['enabled'] = False
         registry = public_registry(config)
-        self.assertEqual([item['id'] for item in registry['instances']], ['max'])
+        self.assertEqual([item['id'] for item in registry['instances']], ['test_data'])
 
     def test_public_registry_contains_only_instance_id_and_name(self):
         registry = public_registry(self.config())
-        self.assertEqual(registry['default_instance'], 'max')
-        self.assertEqual(registry['instances'][0], {'id': 'max', 'name': 'Max'})
+        self.assertEqual(registry['default_instance'], 'test_data')
+        self.assertEqual(registry['instances'][0], {'id': 'test_data', 'name': 'test_data'})
         text = json.dumps(registry)
         self.assertNotIn('tiger_config', text)
         self.assertNotIn('fills_file', text)
@@ -338,50 +337,36 @@ class InstanceTests(unittest.TestCase):
             subprocess.run(['git', 'init', '-b', 'main'], cwd=repo, check=True, capture_output=True)
             subprocess.run(['git', 'config', 'user.name', 'MII Test'], cwd=repo, check=True)
             subprocess.run(['git', 'config', 'user.email', 'mii@example.invalid'], cwd=repo, check=True)
-            max_latest = repo / 'data' / 'instances' / 'max' / 'latest.json'
+            max_latest = repo / 'data' / 'instances' / 'test_data' / 'latest.json'
             max_latest.parent.mkdir(parents=True)
-            max_latest.write_text('{"preserve": "max"}', encoding='utf-8')
-            max_state = private / 'instances' / 'max' / 'private_state.json'
+            max_latest.write_text('{"preserve": "test_data"}', encoding='utf-8')
+            max_state = private / 'instances' / 'test_data' / 'private_state.json'
             max_state.parent.mkdir(parents=True)
             max_state.write_text('{"preserve": "max-state"}', encoding='utf-8')
             instance = {
-                'id': 'account-2', 'name': '账号2（测试）', 'source': 'fixture',
+                'id': 'fixture-account', 'name': '账号2（测试）', 'source': 'fixture',
                 'fixture_file': str(fixture), 'fills_file': str(fills), 'enabled': True,
             }
             config = {
-                'default_instance': 'max',
+                'default_instance': 'test_data',
                 'instances': [
-                    {'id': 'max', 'name': 'Max', 'tiger_config': '/max', 'fills_file': '/max/fills'},
+                    {'id': 'test_data', 'name': 'test_data', 'tiger_config': '/max', 'fills_file': '/max/fills'},
                     instance,
                 ],
             }
             args = SimpleNamespace(tiger_config=None, fills_file=None, dry_run=False, no_push=True, repo=str(repo))
             with patch('publisher.mii_publisher.PRIVATE_DIR', private):
                 run_instance(instance, args, public_registry(config))
-                first = json.loads((repo / 'data' / 'instances' / 'account-2' / 'latest.json').read_text(encoding='utf-8'))
+                first = json.loads((repo / 'data' / 'instances' / 'fixture-account' / 'latest.json').read_text(encoding='utf-8'))
                 run_instance(instance, args, public_registry(config))
-                second = json.loads((repo / 'data' / 'instances' / 'account-2' / 'latest.json').read_text(encoding='utf-8'))
+                second = json.loads((repo / 'data' / 'instances' / 'fixture-account' / 'latest.json').read_text(encoding='utf-8'))
 
             self.assertNotEqual(first['mii_index'], second['mii_index'])
-            self.assertEqual(len(json.loads((repo / 'data' / 'instances' / 'account-2' / 'history.json').read_text(encoding='utf-8'))), 2)
-            self.assertEqual(json.loads(max_latest.read_text(encoding='utf-8'))['preserve'], 'max')
+            self.assertEqual(len(json.loads((repo / 'data' / 'instances' / 'fixture-account' / 'history.json').read_text(encoding='utf-8'))), 2)
+            self.assertEqual(json.loads(max_latest.read_text(encoding='utf-8'))['preserve'], 'test_data')
             self.assertEqual(json.loads(max_state.read_text(encoding='utf-8'))['preserve'], 'max-state')
-            state = json.loads((private / 'instances' / 'account-2' / 'private_state.json').read_text(encoding='utf-8'))
+            state = json.loads((private / 'instances' / 'fixture-account' / 'private_state.json').read_text(encoding='utf-8'))
             self.assertEqual(state['fixture_cursor'], 2)
-
-    def test_legacy_state_is_copied_once_and_never_overwritten(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'private_state.json').write_text('{"nav": 1.0}', encoding='utf-8')
-            (root / 'cash_flows.json').write_text('[{"id": "d1"}]', encoding='utf-8')
-            migrate_legacy_state(root)
-            migrated = root / 'instances' / 'max' / 'private_state.json'
-            self.assertEqual(json.loads(migrated.read_text(encoding='utf-8'))['nav'], 1.0)
-            self.assertTrue((root / 'private_state.json').exists())
-            migrated.write_text('{"nav": 1.2}', encoding='utf-8')
-            migrate_legacy_state(root)
-            self.assertEqual(json.loads(migrated.read_text(encoding='utf-8'))['nav'], 1.2)
-
 
 class PublicFileTests(unittest.TestCase):
     def files(self):
@@ -418,23 +403,23 @@ class PublicFileTests(unittest.TestCase):
             subprocess.run(['git', 'config', 'user.name', 'MII Test'], cwd=repo, check=True)
             subprocess.run(['git', 'config', 'user.email', 'mii@example.invalid'], cwd=repo, check=True)
             config = {
-                'default_instance': 'max',
+                'default_instance': 'test_data',
                 'instances': [
-                    {'id': 'max', 'name': 'Max', 'tiger_config': '/max', 'fills_file': '/max/fills'},
+                    {'id': 'test_data', 'name': 'test_data', 'tiger_config': '/max', 'fills_file': '/max/fills'},
                     {'id': 'growth', 'name': 'Growth', 'tiger_config': '/growth', 'fills_file': '/growth/fills'},
                 ],
             }
             registry = public_registry(config)
-            publish_files(repo, self.files(), push=False, instance_id='max', registry=registry)
+            publish_files(repo, self.files(), push=False, instance_id='test_data', registry=registry)
             other = self.files()
             other['latest']['mii_index'] = 101.0
             publish_files(repo, other, push=False, instance_id='growth', registry=registry)
 
             self.assertEqual((repo / 'data' / 'latest.json').read_text(encoding='utf-8'),
-                             (repo / 'data' / 'instances' / 'max' / 'latest.json').read_text(encoding='utf-8'))
-            self.assertEqual(json.loads((repo / 'data' / 'instances' / 'max' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 100.0)
+                             (repo / 'data' / 'instances' / 'test_data' / 'latest.json').read_text(encoding='utf-8'))
+            self.assertEqual(json.loads((repo / 'data' / 'instances' / 'test_data' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 100.0)
             self.assertEqual(json.loads((repo / 'data' / 'instances' / 'growth' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 101.0)
-            self.assertEqual(json.loads((repo / 'data' / 'instances.json').read_text(encoding='utf-8'))['default_instance'], 'max')
+            self.assertEqual(json.loads((repo / 'data' / 'instances.json').read_text(encoding='utf-8'))['default_instance'], 'test_data')
 
     def test_publish_files_commits_only_actual_changes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -443,8 +428,12 @@ class PublicFileTests(unittest.TestCase):
             subprocess.run(['git', 'config', 'user.name', 'MII Test'], cwd=repo, check=True)
             subprocess.run(['git', 'config', 'user.email', 'mii@example.invalid'], cwd=repo, check=True)
 
-            self.assertTrue(publish_files(repo, self.files(), push=False))
-            self.assertFalse(publish_files(repo, self.files(), push=False))
+            registry = public_registry({
+                'default_instance': 'test_data',
+                'instances': [{'id': 'test_data', 'name': 'test_data'}],
+            })
+            self.assertTrue(publish_files(repo, self.files(), push=False, instance_id='test_data', registry=registry))
+            self.assertFalse(publish_files(repo, self.files(), push=False, instance_id='test_data', registry=registry))
             count = subprocess.check_output(
                 ['git', 'rev-list', '--count', 'HEAD'], cwd=repo, text=True).strip()
             self.assertEqual(count, '1')
