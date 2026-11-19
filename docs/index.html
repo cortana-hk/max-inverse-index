@@ -7,8 +7,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://raw.githubusercontent.com; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#0b0d0c">
   <title>Max Inverse Index — 看看 Max 又买了啥</title>
-  <link rel="stylesheet" href="assets/style.css?v=9">
-  <script src="assets/app.js?v=9" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=10">
+  <script src="assets/app.js?v=10" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -34,25 +34,23 @@
       <div class="hero-copy">
         <div class="title-line">
           <h1 id="page-title">Max Inverse <span>Index.</span></h1>
-          <span class="title-note">反向购买，别墅靠海</span>
+          <div class="title-index"><span>MII</span><strong id="mii-index">100.00</strong></div>
         </div>
+        <p class="title-note">反向购买，别墅靠海</p>
         <p class="subtitle">看看 Max 又买了啥</p>
       </div>
       <p class="updated" id="updated-at">等待第一个有效快照</p>
     </section>
 
-    <section class="metrics" aria-label="MII 变化概览">
+    <section class="metrics" aria-label="反买 Max 收益概览">
       <article class="metric-card metric-primary">
-        <div class="metric-heading"><span>MII 累计变化</span><span class="metric-index">01</span></div>
+        <div class="metric-heading"><span>反买 Max 的累计收益率</span></div>
         <p class="metric-value neutral" id="total-return">—</p>
+        <p class="metric-caption" id="baseline-caption">从最早数据日至今</p>
       </article>
       <article class="metric-card">
-        <div class="metric-heading"><span>MII 今日变化</span><span class="metric-index">02</span></div>
+        <div class="metric-heading"><span>反买 Max 的今日收益率</span></div>
         <p class="metric-value neutral" id="day-return">—</p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-heading"><span>MII 指数</span><span class="metric-index">03</span></div>
-        <p class="metric-value" id="mii-index">100.00</p>
       </article>
     </section>
 

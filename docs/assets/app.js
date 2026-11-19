@@ -84,6 +84,9 @@ function renderMetrics(latest, baseline) {
   applyTone(total, Number(totalChange));
   applyTone(day, Number(latest.day_return_pct));
   document.getElementById('mii-index').textContent = index.toFixed(2);
+  document.getElementById('baseline-caption').textContent = baseline
+    ? `从 ${dateInDisplayZone(baseline.time)} 至今`
+    : '从最早数据日至今';
 }
 
 function renderHoldings(holdings) {
