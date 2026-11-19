@@ -3,6 +3,7 @@
 const DATA_ROOT = 'https://raw.githubusercontent.com/cortana-hk/max-inverse-index/main/data';
 const REFRESH_MS = 60_000;
 const STALE_MS = 3 * 60_000;
+const DISPLAY_ZONE = 'America/New_York';
 const ACTION_LABELS = { buy: '买入', sell: '卖出', new: '新建', increase: '增持', reduce: '减持', close: '清仓' };
 let hasSuccessfulLoad = false;
 let cachedData = null;
@@ -35,10 +36,19 @@ function formatTime(value, includeDate = true) {
   if (!value) return '等待首个快照';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '时间未知';
-  return new Intl.DateTimeFormat('zh-HK', {
-    timeZone: 'Asia/Hong_Kong', month: includeDate ? '2-digit' : undefined,
+  return new Intl.DateTimeFormat('zh-US', {
+    timeZone: DISPLAY_ZONE, month: includeDate ? '2-digit' : undefined,
     day: includeDate ? '2-digit' : undefined, hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(date);
+}
+
+function dateInDisplayZone(value) {
+  const date = new Date(value);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DISPLAY_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function setStatus(state, label) {
@@ -46,23 +56,40 @@ function setStatus(state, label) {
   document.getElementById('live-label').textContent = label;
 }
 
-function basePoint() {
-  const value = Number(document.getElementById('base-point').value);
-  return Number.isFinite(value) && value > 0 ? value : 100;
+function validHistory(history) {
+  return history.filter((point) => Number.isFinite(Number(point.mii_index)) && Number(point.mii_index) > 0);
 }
 
-function scaledIndex(value) {
-  return Number(value) * basePoint() / 100;
+function configureBaseline(points) {
+  const input = document.getElementById('base-date');
+  if (!points.length) return;
+  const first = dateInDisplayZone(points[0].time);
+  const last = dateInDisplayZone(points[points.length - 1].time);
+  input.min = first;
+  input.max = last;
+  if (!input.value || input.value < first || input.value > last) input.value = first;
 }
 
-function renderMetrics(latest) {
+function baselinePoint(points) {
+  if (!points.length) return null;
+  const selected = document.getElementById('base-date').value || dateInDisplayZone(points[0].time);
+  return points.find((point) => dateInDisplayZone(point.time) >= selected) || points[points.length - 1];
+}
+
+function rebasedIndex(value, baseline) {
+  return baseline ? Number(value) / Number(baseline.mii_index) * 100 : 100;
+}
+
+function renderMetrics(latest, baseline) {
+  const index = rebasedIndex(latest.mii_index, baseline);
+  const totalChange = baseline ? index - 100 : null;
   const total = document.getElementById('total-return');
   const day = document.getElementById('day-return');
-  total.textContent = signed(latest.total_return_pct);
+  total.textContent = signed(totalChange);
   day.textContent = signed(latest.day_return_pct);
-  applyTone(total, Number(latest.total_return_pct));
+  applyTone(total, Number(totalChange));
   applyTone(day, Number(latest.day_return_pct));
-  document.getElementById('mii-index').textContent = scaledIndex(latest.mii_index).toFixed(2);
+  document.getElementById('mii-index').textContent = index.toFixed(2);
 }
 
 function renderHoldings(holdings) {
@@ -87,14 +114,14 @@ function renderHoldings(holdings) {
     track.append(fill);
     weight.append(track);
 
+    const pricePair = element('span', 'price-pair');
+    pricePair.append(element('span', 'cost-price', formatPrice(holding.average_cost, holding.currency)));
+    const direction = Number(holding.current_price) > Number(holding.average_cost) ? 'up' : Number(holding.current_price) < Number(holding.average_cost) ? 'down' : 'flat';
+    pricePair.append(element('span', `price-arrow ${direction}`, direction === 'up' ? '↗' : direction === 'down' ? '↘' : '→'));
+    pricePair.append(element('span', `current-price ${direction}`, formatPrice(holding.current_price, holding.currency)));
     const pnl = element('span', 'pnl', signed(holding.unrealized_pnl_pct));
     applyTone(pnl, Number(holding.unrealized_pnl_pct));
-    row.append(
-      identity, weight,
-      element('span', 'price', formatPrice(holding.average_cost, holding.currency)),
-      element('span', 'price', formatPrice(holding.current_price, holding.currency)),
-      pnl,
-    );
+    row.append(identity, weight, pricePair, pnl);
     list.append(row);
   });
 }
@@ -107,41 +134,41 @@ function renderEvents(events) {
     list.append(element('p', 'placeholder', '暂无成交记录。'));
     return;
   }
-  [...events].reverse().forEach((event) => {
+  [...events].reverse().forEach((event, index) => {
     const action = ACTION_LABELS[event.action] || '变化';
-    const row = element('div', 'trade-row');
+    const row = element('article', `trade-row${index < 3 ? ' recent' : ''}`);
     row.dataset.action = event.action;
+    const time = element('time', 'trade-time', formatTime(event.time));
+    const rail = element('span', 'trade-rail');
+    const body = element('div', 'trade-body');
+    const title = element('div', 'trade-title');
+    title.append(element('span', 'symbol', event.symbol));
+    title.append(element('span', 'trade-action', action));
+    if (index === 0) title.append(element('span', 'latest-badge', '最新'));
     const detail = event.price !== undefined
       ? formatPrice(event.price, event.currency)
       : `${Number(event.previous_weight_pct).toFixed(2)}% → ${Number(event.weight_pct).toFixed(2)}%`;
-    row.append(
-      element('time', 'trade-time', formatTime(event.time)),
-      element('span', 'symbol', event.symbol),
-      element('span', 'trade-action', action),
-      element('span', 'price', detail),
-    );
+    body.append(title, element('span', 'trade-change', event.price !== undefined ? '成交' : '仓位变化'));
+    row.append(time, rail, body, element('span', 'trade-price', detail));
     list.append(row);
   });
 }
 
-function renderChart(history) {
+function renderChart(history, baseline) {
   const svg = document.getElementById('performance-chart');
   const empty = document.getElementById('chart-empty');
   const axis = document.getElementById('chart-axis');
   svg.replaceChildren();
   axis.replaceChildren();
-  document.getElementById('point-count').textContent = `${history.length} 个数据点`;
-  if (!history.length) {
-    empty.hidden = false;
-    return;
-  }
+  const allPoints = validHistory(history);
+  const points = baseline ? allPoints.filter((point) => new Date(point.time) >= new Date(baseline.time)) : [];
+  document.getElementById('point-count').textContent = `${points.length} 个数据点`;
+  if (!points.length) { empty.hidden = false; return; }
   empty.hidden = true;
-  const points = history.filter((point) => Number.isFinite(Number(point.mii_index)));
-  if (!points.length) return;
-  const values = points.map((point) => scaledIndex(point.mii_index));
+  const values = points.map((point) => rebasedIndex(point.mii_index, baseline));
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
-  const padding = Math.max((maximum - minimum) * 0.18, basePoint() * 0.01);
+  const padding = Math.max((maximum - minimum) * 0.18, 1);
   minimum -= padding;
   maximum += padding;
   const x = (index) => points.length === 1 ? 500 : index / (points.length - 1) * 1000;
@@ -150,26 +177,21 @@ function renderChart(history) {
   const defs = document.createElementNS(namespace, 'defs');
   const gradient = document.createElementNS(namespace, 'linearGradient');
   gradient.setAttribute('id', 'area-gradient');
-  gradient.setAttribute('x1', '0');
-  gradient.setAttribute('y1', '0');
-  gradient.setAttribute('x2', '0');
-  gradient.setAttribute('y2', '1');
+  gradient.setAttribute('x1', '0'); gradient.setAttribute('y1', '0');
+  gradient.setAttribute('x2', '0'); gradient.setAttribute('y2', '1');
   [['0%', '0.18'], ['100%', '0']].forEach(([offset, opacity]) => {
     const stop = document.createElementNS(namespace, 'stop');
-    stop.setAttribute('offset', offset);
-    stop.setAttribute('stop-color', '#c9f66f');
-    stop.setAttribute('stop-opacity', opacity);
+    stop.setAttribute('offset', offset); stop.setAttribute('stop-color', '#c9f66f'); stop.setAttribute('stop-opacity', opacity);
     gradient.append(stop);
   });
-  defs.append(gradient);
-  svg.append(defs);
+  defs.append(gradient); svg.append(defs);
   [16, 63, 110, 157, 204].forEach((lineY) => {
     const line = document.createElementNS(namespace, 'line');
     line.setAttribute('x1', '0'); line.setAttribute('x2', '1000');
     line.setAttribute('y1', String(lineY)); line.setAttribute('y2', String(lineY));
     line.setAttribute('class', 'chart-grid'); svg.append(line);
   });
-  const coordinates = points.map((point, index) => `${x(index)},${y(scaledIndex(point.mii_index))}`);
+  const coordinates = points.map((point, index) => `${x(index)},${y(rebasedIndex(point.mii_index, baseline))}`);
   if (points.length > 1) {
     const area = document.createElementNS(namespace, 'polygon');
     area.setAttribute('points', `0,220 ${coordinates.join(' ')} 1000,220`);
@@ -179,7 +201,7 @@ function renderChart(history) {
   line.setAttribute('points', coordinates.join(' ')); line.setAttribute('class', 'chart-line'); svg.append(line);
   const dot = document.createElementNS(namespace, 'circle');
   dot.setAttribute('cx', String(x(points.length - 1)));
-  dot.setAttribute('cy', String(y(scaledIndex(points[points.length - 1].mii_index))));
+  dot.setAttribute('cy', String(y(rebasedIndex(points[points.length - 1].mii_index, baseline))));
   dot.setAttribute('r', '4'); dot.setAttribute('class', 'chart-point'); svg.append(dot);
   [points[0].time, points[points.length - 1].time].forEach((time) => axis.append(element('span', '', formatTime(time))));
 }
@@ -188,7 +210,8 @@ function updateFreshness(latest) {
   if (!latest.generated_at) { setStatus('loading', '等待首个快照'); return; }
   const timestamp = new Date(latest.generated_at).getTime();
   if (!Number.isFinite(timestamp)) { setStatus('loading', '等待首个快照'); return; }
-  setStatus(Date.now() - timestamp > STALE_MS ? 'stale' : 'live', Date.now() - timestamp > STALE_MS ? '数据可能过期' : '近实时 · 自动刷新');
+  const stale = Date.now() - timestamp > STALE_MS;
+  setStatus(stale ? 'stale' : 'live', stale ? '数据可能过期' : '近实时 · 自动刷新');
 }
 
 function validatePayload(latest, history, events) {
@@ -198,10 +221,13 @@ function validatePayload(latest, history, events) {
 
 function renderAll() {
   if (!cachedData) return;
-  renderMetrics(cachedData.latest);
+  const points = validHistory(cachedData.history);
+  configureBaseline(points);
+  const baseline = baselinePoint(points);
+  renderMetrics(cachedData.latest, baseline);
   renderHoldings(cachedData.latest.holdings);
   renderEvents(cachedData.events);
-  renderChart(cachedData.history);
+  renderChart(cachedData.history, baseline);
 }
 
 async function fetchJson(name) {
@@ -214,9 +240,15 @@ async function refresh() {
   try {
     const [latest, history, events] = await Promise.all([fetchJson('latest'), fetchJson('history'), fetchJson('events')]);
     validatePayload(latest, history, events);
+    if (!hasSuccessfulLoad) {
+      try {
+        const savedDate = localStorage.getItem('mii-base-date');
+        if (savedDate) document.getElementById('base-date').value = savedDate;
+      } catch (error) { /* storage is optional */ }
+    }
     cachedData = { latest, history, events };
     renderAll();
-    document.getElementById('updated-at').textContent = `数据时间 ${formatTime(latest.generated_at)} HKT · 每 60 秒检查更新`;
+    document.getElementById('updated-at').textContent = `数据时间 ${formatTime(latest.generated_at)} ET · 每 60 秒检查更新`;
     updateFreshness(latest);
     hasSuccessfulLoad = true;
     document.getElementById('updated-at').dataset.timestamp = latest.generated_at;
@@ -227,15 +259,9 @@ async function refresh() {
   }
 }
 
-try {
-  const savedBase = Number(localStorage.getItem('mii-base-point'));
-  if (Number.isFinite(savedBase) && savedBase > 0) document.getElementById('base-point').value = savedBase;
-} catch (error) { /* localStorage may be disabled */ }
-document.getElementById('base-point').addEventListener('input', () => {
-  const value = basePoint();
-  try { localStorage.setItem('mii-base-point', String(value)); } catch (error) { /* localStorage may be disabled */ }
-  renderMetrics(cachedData ? cachedData.latest : { total_return_pct: null, day_return_pct: null, mii_index: 100 });
-  if (cachedData) renderChart(cachedData.history);
+document.getElementById('base-date').addEventListener('change', () => {
+  try { localStorage.setItem('mii-base-date', document.getElementById('base-date').value); } catch (error) { /* storage is optional */ }
+  renderAll();
 });
 
 refresh();

@@ -1,0 +1,516 @@
+#!/usr/bin/env python3
+"""Max Inverse Index 只读账户快照发布器。"""
+import argparse
+import copy
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from bisect import bisect_right
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from tigeropen.tiger_open_config import TigerOpenClientConfig
+from tigeropen.trade.trade_client import TradeClient
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PRIVATE_DIR = PROJECT_ROOT / 'private'
+USD_HKD_RATE = 7.8
+NEW_YORK = ZoneInfo('America/New_York')
+HONG_KONG = ZoneInfo('Asia/Hong_Kong')
+PUBLIC_FILENAMES = ('latest', 'history', 'events')
+FORBIDDEN_PUBLIC_KEYS = {
+    'quantity', 'qty', 'cost', 'market_price', 'market_value',
+    'equity', 'equity_usd', 'cash', 'net_liquidation', 'account', 'account_id',
+    'order', 'order_id', 'tiger_id', 'token', 'private_key', 'units', 'nav',
+}
+SECRET_PATTERNS = (
+    re.compile(r'github_pat_[A-Za-z0-9_]+'),
+    re.compile(r'ghp_[A-Za-z0-9]+'),
+    re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+)
+
+
+def _timestamp(value):
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _iso(value):
+    return _timestamp(value).isoformat(timespec='seconds')
+
+
+def session_start(value):
+    local_time = _timestamp(value).astimezone(NEW_YORK)
+    boundary_date = local_time.date()
+    if local_time.time() < datetime.strptime('20:00', '%H:%M').time():
+        boundary_date -= timedelta(days=1)
+    boundary = datetime.combine(boundary_date, datetime.strptime('20:00', '%H:%M').time(), NEW_YORK)
+    return boundary.astimezone(timezone.utc)
+
+
+def _refresh_session_day_changes(history):
+    times = [_timestamp(point['time']) for point in history]
+    first_in_session = {}
+    for index, point in enumerate(history):
+        start = session_start(times[index])
+        first_in_session.setdefault(start, index)
+        baseline_index = bisect_right(times, start, 0, index) - 1
+        if baseline_index < 0:
+            baseline_index = first_in_session[start]
+        baseline = _finite(history[baseline_index]['mii_index'], '日界 MII 点位')
+        current = _finite(point['mii_index'], '当期 MII 点位')
+        point['day_return_pct'] = _public_return(current / baseline - 1.0) if baseline > 0 else None
+
+
+def _finite(value, label):
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'{label} 不是数值') from exc
+    if not math.isfinite(number):
+        raise ValueError(f'{label} 不是有限数值')
+    return number
+
+
+def _public_return(value):
+    return None if value is None else round(value * 100.0, 4)
+
+
+def _normalise_positions(positions, equity_usd):
+    normalised = []
+    for item in positions or []:
+        contract = getattr(item, 'contract', None)
+        symbol = str(getattr(contract, 'symbol', '') or '').strip().upper()
+        if not symbol:
+            raise ValueError('持仓缺少标的代码')
+        quantity = _finite(getattr(item, 'quantity', None), f'{symbol} 持仓数量')
+        if quantity == 0:
+            continue
+        price = _finite(getattr(item, 'market_price', None), f'{symbol} 行情')
+        if price <= 0:
+            raise ValueError(f'{symbol} 行情无效')
+        currency = str(
+            getattr(contract, 'currency', None) or getattr(item, 'currency', None) or 'USD'
+        ).upper()
+        market_value = getattr(item, 'market_value', None)
+        if market_value is None:
+            market_value = quantity * price
+        market_value = _finite(market_value, f'{symbol} 市值')
+        market_value_usd = market_value / USD_HKD_RATE if currency == 'HKD' else market_value
+        average_cost = _finite(getattr(item, 'average_cost', None), f'{symbol} 成本')
+        supplied_pnl = getattr(item, 'unrealized_pnl_percent', None)
+        if supplied_pnl is not None:
+            pnl_pct = _finite(supplied_pnl, f'{symbol} 浮动盈亏') * 100.0
+        elif average_cost > 0:
+            pnl_pct = ((average_cost - price) if quantity < 0 else (price - average_cost)) / average_cost * 100
+        else:
+            pnl_pct = 0.0
+        normalised.append({
+            'symbol': symbol,
+            'market': str(getattr(contract, 'market', None) or ('HK' if currency == 'HKD' else 'US')),
+            'currency': currency,
+            'quantity': quantity,
+            'weight_pct': round(market_value_usd / equity_usd * 100.0, 4),
+            'average_cost': round(average_cost, 4),
+            'current_price': round(price, 4),
+            'unrealized_pnl_pct': round(pnl_pct, 4),
+        })
+    return sorted(normalised, key=lambda item: (-abs(item['weight_pct']), item['symbol']))
+
+
+def _migrate_legacy_index(state):
+    if not state.get('history') or state.get('index_mode') == 'inverse':
+        return
+    previous_account_index = None
+    inverse_index = 100.0
+    for point in state['history']:
+        account_index = _finite(point['mii_index'], '旧指数点位')
+        if previous_account_index and previous_account_index > 0:
+            interval_return = account_index / previous_account_index - 1.0
+            inverse_index = max(0.0, inverse_index * (1.0 - interval_return))
+        point.update({
+            'mii_index': round(inverse_index, 4),
+            'total_return_pct': _public_return(inverse_index / 100.0 - 1.0),
+        })
+        previous_account_index = account_index
+    _refresh_session_day_changes(state['history'])
+    state['mii_index'] = inverse_index
+    state['index_mode'] = 'inverse'
+    if state.get('latest'):
+        for key in ('mii_index', 'total_return_pct', 'day_return_pct'):
+            state['latest'][key] = state['history'][-1][key]
+
+
+def _position_events(previous, current, observed_at):
+    events = []
+    previous_by_symbol = {item['symbol']: item for item in previous}
+    current_by_symbol = {item['symbol']: item for item in current}
+    for symbol in sorted(set(previous_by_symbol) | set(current_by_symbol)):
+        before = previous_by_symbol.get(symbol)
+        after = current_by_symbol.get(symbol)
+        if before is None:
+            action = 'new'
+        elif after is None:
+            action = 'close'
+        elif before['quantity'] * after['quantity'] < 0:
+            action = 'new'
+        elif abs(after['quantity']) > abs(before['quantity']):
+            action = 'increase'
+        elif abs(after['quantity']) < abs(before['quantity']):
+            action = 'reduce'
+        else:
+            continue
+        events.append({
+            'time': _iso(observed_at),
+            'symbol': symbol,
+            'action': action,
+            'previous_weight_pct': before['weight_pct'] if before else 0.0,
+            'weight_pct': after['weight_pct'] if after else 0.0,
+        })
+    return events
+
+
+def advance_state(state, positions, equity_usd, observed_at, cash_flows=None):
+    """推进私密收益状态并返回仅含白名单字段的公开文件。"""
+    equity_usd = _finite(equity_usd, '账户净资产')
+    if equity_usd <= 0:
+        raise ValueError('账户净资产必须为正数')
+    observed_at = _timestamp(observed_at)
+    next_state = copy.deepcopy(state or {})
+    _migrate_legacy_index(next_state)
+    current = _normalise_positions(positions, equity_usd)
+    previous = next_state.get('positions', [])
+    had_baseline = bool(next_state.get('history'))
+    daily_nav = next_state.setdefault('daily_nav', {})
+    flows = sorted(cash_flows or [], key=lambda item: _timestamp(item['time']))
+    processed = set(next_state.get('processed_cash_flows', []))
+
+    if not had_baseline:
+        next_state['units'] = equity_usd
+        next_state['nav'] = 1.0
+        next_state['mii_index'] = 100.0
+        next_state['index_mode'] = 'inverse'
+        for flow in flows:
+            if _timestamp(flow['time']) <= observed_at:
+                processed.add(str(flow['id']))
+    else:
+        previous_nav = _finite(next_state['nav'], '上一单位净值')
+        previous_mii = _finite(next_state.get('mii_index', 100.0), '上一 MII 点位')
+        units = _finite(next_state['units'], '上一基金份额')
+        for flow in flows:
+            flow_id = str(flow['id'])
+            if flow_id in processed or _timestamp(flow['time']) > observed_at:
+                continue
+            amount = _finite(flow['amount_usd'], '出入金金额')
+            units += amount / previous_nav
+            if units <= 0:
+                raise ValueError('出入金后基金份额必须为正数')
+            processed.add(flow_id)
+        next_state['units'] = units
+        next_state['nav'] = equity_usd / units
+        interval_return = next_state['nav'] / previous_nav - 1.0
+        next_state['mii_index'] = max(0.0, previous_mii * (1.0 - interval_return))
+
+    nav = next_state['nav']
+    mii_index = next_state['mii_index']
+    latest = {
+        'schema_version': 1,
+        'generated_at': _iso(observed_at),
+        'mii_index': round(mii_index, 4),
+        'total_return_pct': _public_return(mii_index / 100.0 - 1.0),
+        'day_return_pct': None,
+        'holdings': [{
+            'symbol': item['symbol'],
+            'market': item['market'],
+            'currency': item['currency'],
+            'weight_pct': item['weight_pct'],
+            'average_cost': item['average_cost'],
+            'current_price': item['current_price'],
+            'unrealized_pnl_pct': item['unrealized_pnl_pct'],
+        } for item in current],
+    }
+    point = {key: latest[key] for key in (
+        'generated_at', 'mii_index', 'total_return_pct', 'day_return_pct')}
+    point['time'] = point.pop('generated_at')
+    history = next_state.get('history', []) + [point]
+    _refresh_session_day_changes(history)
+    latest['day_return_pct'] = history[-1]['day_return_pct']
+    point['day_return_pct'] = history[-1]['day_return_pct']
+    events = next_state.get('events', [])
+    if had_baseline:
+        events = events + _position_events(previous, current, observed_at)
+
+    next_state.update({
+        'positions': current,
+        'processed_cash_flows': sorted(processed),
+        'history': history,
+        'events': events,
+        'latest': latest,
+        'day_boundary': 'new_york_20',
+    })
+    daily_nav[observed_at.astimezone(NEW_YORK).date().isoformat()] = nav
+
+    previous_latest = state.get('latest') if state else None
+    if previous_latest:
+        old_public = {key: value for key, value in previous_latest.items() if key != 'generated_at'}
+        new_public = {key: value for key, value in latest.items() if key != 'generated_at'}
+        previous_time = _timestamp(previous_latest['generated_at'])
+        no_new_events = len(next_state['events']) == len(state.get('events', []))
+        if (old_public == new_public and no_new_events and state.get('day_boundary') == 'new_york_20'
+                and (observed_at - previous_time).total_seconds() < 300):
+            next_state['latest'] = previous_latest
+            next_state['history'] = copy.deepcopy(state.get('history', []))
+
+    files = {
+        'latest': copy.deepcopy(next_state['latest']),
+        'history': copy.deepcopy(next_state['history']),
+        'events': copy.deepcopy(next_state['events']),
+    }
+    assert_public_payload_safe(files)
+    return next_state, files
+
+
+def read_fill_events(path):
+    """从本地成交记录回填全部订单，仅输出时间、方向、价格和币种。"""
+    path = Path(path)
+    if not path.exists():
+        return []
+    with path.open('r', encoding='utf-8') as stream:
+        records = [json.loads(line) for line in stream if line.strip()]
+    directions = {}
+    for record in records:
+        if record.get('record_type') == 'buy_components':
+            directions[str(record.get('order_id', ''))] = 'buy'
+        elif record.get('record_type') == 'sell_components':
+            directions[str(record.get('order_id', ''))] = 'sell'
+
+    orders = {}
+    for line_number, record in enumerate(records):
+        if record.get('record_type') != 'fill':
+            continue
+        order_id = str(record.get('order_id', ''))
+        key = order_id or f'line-{line_number}'
+        quantity = _finite(record.get('qty'), '成交数量')
+        price = _finite(record.get('price'), '成交价格')
+        if quantity == 0 or price <= 0:
+            continue
+        symbol = str(record.get('symbol', '')).upper()
+        if not symbol:
+            raise ValueError('成交记录缺少标的代码')
+        parsed_time = datetime.fromisoformat(str(record['time']).replace('Z', '+00:00'))
+        if parsed_time.tzinfo is None:
+            parsed_time = parsed_time.replace(tzinfo=HONG_KONG)
+        timestamp = parsed_time.astimezone(timezone.utc)
+        order = orders.setdefault(key, {
+            'symbol': symbol, 'price_quantity': 0.0, 'quantity': 0.0,
+            'time': timestamp, 'action': directions.get(order_id, 'buy' if quantity > 0 else 'sell'),
+        })
+        order['price_quantity'] += price * abs(quantity)
+        order['quantity'] += abs(quantity)
+        order['time'] = max(order['time'], timestamp)
+
+    events = [{
+        'time': order['time'].isoformat(timespec='seconds'),
+        'symbol': order['symbol'],
+        'action': order['action'],
+        'price': round(order['price_quantity'] / order['quantity'], 4),
+        'currency': 'HKD' if order['symbol'].isdigit() else 'USD',
+    } for order in orders.values()]
+    return sorted(events, key=lambda event: event['time'])
+
+
+def extract_net_liquidation(assets):
+    for account in assets or []:
+        summary = getattr(account, 'summary', None)
+        value = getattr(summary, 'net_liquidation', None)
+        if value is not None:
+            equity = _finite(value, '账户净资产')
+            if equity > 0:
+                return equity
+    raise ValueError('未读取到有效账户净资产')
+
+
+def create_trade_client(config_dir):
+    config = TigerOpenClientConfig(props_path=str(Path(config_dir)))
+    config.token_refresh_duration = 24 * 60 * 60
+    return TradeClient(config)
+
+
+def collect_account(trade):
+    positions = trade.get_positions() or []
+    equity = extract_net_liquidation(trade.get_assets())
+    return positions, equity
+
+
+def assert_public_payload_safe(files):
+    if set(files) != set(PUBLIC_FILENAMES):
+        raise ValueError('公开文件集合不完整')
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if str(key).lower() in FORBIDDEN_PUBLIC_KEYS:
+                    raise ValueError(f'公开数据包含禁止字段: {key}')
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+        elif isinstance(value, str):
+            if any(pattern.search(value) for pattern in SECRET_PATTERNS):
+                raise ValueError('公开数据包含疑似密钥')
+
+    walk(files)
+
+
+def _atomic_json(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary_name = tempfile.mkstemp(prefix=path.name + '.', dir=path.parent)
+    try:
+        with os.fdopen(handle, 'w', encoding='utf-8') as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            stream.write('\n')
+        os.replace(temporary_name, path)
+    except Exception:
+        try:
+            os.unlink(temporary_name)
+        except OSError:
+            pass
+        raise
+
+
+def _git(repo, *args, check=True):
+    result = subprocess.run(
+        ['git', *args], cwd=repo, text=True, capture_output=True, check=False)
+    if check and result.returncode:
+        raise RuntimeError(f'Git 命令失败: git {args[0]}')
+    return result
+
+
+def publish_files(repo, files, push=True):
+    """原子写入公开数据；仅实际变化产生提交，绝不 force push。"""
+    repo = Path(repo).resolve()
+    assert_public_payload_safe(files)
+    for name in PUBLIC_FILENAMES:
+        _atomic_json(repo / 'data' / f'{name}.json', files[name])
+    _git(repo, 'add', '--', 'data')
+    if _git(repo, 'diff', '--cached', '--quiet', '--', 'data', check=False).returncode == 0:
+        return False
+    _git(repo, 'commit', '-m', 'Update MII public snapshot', '--', 'data')
+    if push:
+        pushed = _git(repo, 'push', 'origin', 'main', check=False)
+        if pushed.returncode:
+            _git(repo, 'pull', '--rebase', 'origin', 'main')
+            _git(repo, 'push', 'origin', 'main')
+    return True
+
+
+def _load_json(path, default):
+    if not path.exists():
+        return copy.deepcopy(default)
+    with path.open('r', encoding='utf-8') as stream:
+        return json.load(stream)
+
+
+def _save_private_json(path, payload):
+    _atomic_json(path, payload)
+
+
+@contextmanager
+def _instance_lock(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stream = path.open('a+b')
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            stream.seek(0)
+            if stream.tell() == 0:
+                stream.write(b'0')
+                stream.flush()
+            stream.seek(0)
+            try:
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                yield False
+                return
+        yield True
+    finally:
+        try:
+            if os.name == 'nt':
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        stream.close()
+
+
+def run_once(args):
+    trade = create_trade_client(args.tiger_config)
+    positions, equity = collect_account(trade)
+    observed_at = datetime.now(timezone.utc)
+    private_dir = PRIVATE_DIR
+    state = _load_json(private_dir / 'private_state.json', {})
+    flows = _load_json(private_dir / 'cash_flows.json', [])
+    next_state, files = advance_state(state, positions, equity, observed_at, flows)
+    fill_events = read_fill_events(Path(args.fills_file))
+    if fill_events:
+        files['events'] = fill_events
+    assert_public_payload_safe(files)
+
+    if args.dry_run:
+        _atomic_json(private_dir / 'dry-run-public.json', files)
+        print(f"MII dry-run 成功：{len(files['latest']['holdings'])} 个持仓，公开预览已写入已忽略目录。")
+        return
+
+    publish_files(Path(args.repo), files, push=not args.no_push)
+    _save_private_json(private_dir / 'private_state.json', next_state)
+    print(f"MII 快照已发布：{observed_at.isoformat(timespec='seconds')}")
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description='发布 Max Inverse Index 脱敏持仓快照')
+    parser.add_argument('--repo', default=str(PROJECT_ROOT))
+    parser.add_argument('--tiger-config', default=os.environ.get(
+        'MII_TIGER_CONFIG_DIR', str(PROJECT_ROOT.parent / 'TIGER' / 'config')))
+    parser.add_argument('--fills-file', default=os.environ.get(
+        'MII_FILLS_FILE', str(PROJECT_ROOT.parent / 'TIGER' / 'data' / 'fills.jsonl')))
+    parser.add_argument('--once', action='store_true', help='只执行一次')
+    parser.add_argument('--dry-run', action='store_true', help='只验证采集，不写公开仓库或收益基线')
+    parser.add_argument('--no-push', action='store_true', help='只提交到本地公开仓库镜像')
+    parser.add_argument('--interval', type=int, default=60, help='持续模式采集间隔秒数')
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if args.interval < 15:
+        raise SystemExit('--interval 不能小于 15 秒')
+    lock_path = PRIVATE_DIR / 'publisher.lock'
+    with _instance_lock(lock_path) as acquired:
+        if not acquired:
+            print('MII 发布器已在运行。')
+            return 0
+        if args.once or args.dry_run:
+            run_once(args)
+            return 0
+        while True:
+            try:
+                run_once(args)
+            except Exception as exc:
+                print(f'MII 本轮发布失败：{type(exc).__name__}: {exc}', file=sys.stderr)
+            time.sleep(args.interval)
+
+
+if __name__ == '__main__':
+    main()
