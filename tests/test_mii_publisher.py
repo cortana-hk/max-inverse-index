@@ -369,6 +369,16 @@ class InstanceTests(unittest.TestCase):
         registry = public_registry(config)
         self.assertEqual([item['id'] for item in registry['instances']], ['test_data'])
 
+    def test_public_registry_includes_optional_instance_start_date(self):
+        config = self.config()
+        config['instances'][1]['start_date'] = '2026-09-01'
+        registry = public_registry(config)
+        self.assertEqual(registry['instances'][1]['start_date'], '2026-09-01')
+        self.assertNotIn('start_date', registry['instances'][0])
+        config['instances'][1]['start_date'] = '2026/09/01'
+        with self.assertRaises(ValueError):
+            public_registry(config)
+
     def test_public_registry_contains_only_instance_id_and_name(self):
         registry = public_registry(self.config())
         self.assertEqual(registry['default_instance'], 'test_data')

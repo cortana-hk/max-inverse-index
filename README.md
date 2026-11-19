@@ -73,7 +73,7 @@ python publisher/mii_publisher.py --once --instance account-2-real
 schtasks /Run /TN "MII Public Snapshot Publisher"
 ```
 
-持续任务会轮询所有启用实例。一个实例失败不会阻止其他实例。网页右上角切换实例，也可访问 `?instance=account-2-real`。每个实例独立保存 100 起始日。
+持续任务会轮询所有启用实例。一个实例失败不会阻止其他实例。网页右上角切换实例，也可访问 `?instance=account-2-real`。
 
 ## 历史回填与停更恢复
 
@@ -94,6 +94,10 @@ Tiger 实例每次运行会查询 `get_analytics_asset`，用真实历史净资�
 - 重新设为 `true` 会从原状态继续，并自动补齐停更期间券商可提供的历史。
 - 持续任务每轮重新读取配置，通常等待一个采集周期即可。需要立即生效时，先停止 MII 计划任务，修改后执行 `python publisher/mii_publisher.py --once`，再启动任务。
 - `default_instance` 必须保持启用。要禁用默认实例，先把 `default_instance` 改成另一个已启用实例；系统至少需要一个启用的默认实例。
+
+## 实例起始日
+
+网页默认把当前实例最早数据所在日归一为 100。可在实例配置中设置 `start_date: "2026-09-01"`，固定使用该日之后首个有效点作为 100 起点；累计变化和曲线按此归一，后台完整历史不变。起始日不再由网页选择。
 
 ## 计算与安全
 

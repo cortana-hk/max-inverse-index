@@ -7,7 +7,9 @@ const DISPLAY_ZONE = 'America/New_York';
 const ACTION_LABELS = { buy: '买入', sell: '卖出', new: '新建', increase: '增持', reduce: '减持', close: '清仓' };
 let hasSuccessfulLoad = false;
 let cachedData = null;
-let currentInstance = 'test_data';
+let currentInstance = 'max_data';
+let currentInstanceStartDate = null;
+let instanceRegistry = null;
 let loadGeneration = 0;
 
 function element(tag, className, text) {
@@ -62,19 +64,9 @@ function validHistory(history) {
   return history.filter((point) => Number.isFinite(Number(point.mii_index)) && Number(point.mii_index) > 0);
 }
 
-function configureBaseline(points) {
-  const input = document.getElementById('base-date');
-  if (!points.length) return;
-  const first = dateInDisplayZone(points[0].time);
-  const last = dateInDisplayZone(points[points.length - 1].time);
-  input.min = first;
-  input.max = last;
-  if (!input.value || input.value < first || input.value > last) input.value = first;
-}
-
 function baselinePoint(points) {
   if (!points.length) return null;
-  const selected = document.getElementById('base-date').value || dateInDisplayZone(points[0].time);
+  const selected = currentInstanceStartDate || dateInDisplayZone(points[0].time);
   return points.find((point) => dateInDisplayZone(point.time) >= selected) || points[points.length - 1];
 }
 
@@ -224,7 +216,6 @@ function validatePayload(latest, history, events) {
 function renderAll() {
   if (!cachedData) return;
   const points = validHistory(cachedData.history);
-  configureBaseline(points);
   const baseline = baselinePoint(points);
   renderMetrics(cachedData.latest, baseline);
   renderHoldings(cachedData.latest.holdings);
@@ -232,15 +223,9 @@ function renderAll() {
   renderChart(cachedData.history, baseline);
 }
 
-function baseDateStorageKey() {
-  return `mii-base-date:${currentInstance}`;
-}
-
-function restoreBaseDate() {
-  document.getElementById('base-date').value = '';
-  try {
-    document.getElementById('base-date').value = localStorage.getItem(baseDateStorageKey()) || '';
-  } catch (error) { /* storage is optional */ }
+function applyInstanceStartDate() {
+  const instance = instanceRegistry.instances.find((item) => item.id === currentInstance);
+  currentInstanceStartDate = instance && instance.start_date ? instance.start_date : null;
 }
 
 async function fetchJson(name, instanceId = currentInstance) {
@@ -303,7 +288,7 @@ function switchInstance(instanceId) {
   document.getElementById('updated-at').dataset.timestamp = '';
   document.getElementById('updated-at').textContent = '正在切换实例…';
   setStatus('loading', '读取实例数据');
-  restoreBaseDate();
+  applyInstanceStartDate();
   try { localStorage.setItem('mii-instance', instanceId); } catch (error) { /* storage is optional */ }
   const url = new URL(window.location.href);
   url.searchParams.set('instance', instanceId);
@@ -311,14 +296,11 @@ function switchInstance(instanceId) {
   refresh();
 }
 
-document.getElementById('base-date').addEventListener('change', () => {
-  try { localStorage.setItem(baseDateStorageKey(), document.getElementById('base-date').value); } catch (error) { /* storage is optional */ }
-  renderAll();
-});
 document.getElementById('instance-select').addEventListener('change', (event) => switchInstance(event.target.value));
 
 async function initialise() {
   const registry = await fetchRegistry();
+  instanceRegistry = registry;
   const select = document.getElementById('instance-select');
   select.replaceChildren();
   registry.instances.forEach((instance) => {
@@ -328,7 +310,7 @@ async function initialise() {
   });
   currentInstance = preferredInstance(registry);
   select.value = currentInstance;
-  restoreBaseDate();
+  applyInstanceStartDate();
   refresh();
 }
 

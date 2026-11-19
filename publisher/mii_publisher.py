@@ -576,6 +576,13 @@ def public_registry(config):
             raise ValueError('实例名称不能为空且实例 ID 不能重复')
         seen.add(instance_id)
         public_instance = {'id': instance_id, 'name': name}
+        if 'start_date' in instance:
+            start_date = str(instance['start_date'])
+            try:
+                datetime.strptime(start_date, '%Y-%m-%d')
+            except ValueError as exc:
+                raise ValueError('实例 start_date 必须使用 YYYY-MM-DD') from exc
+            public_instance['start_date'] = start_date
         if instance.get('source', 'tiger') == 'fixture':
             public_instance['test'] = True
         public_instances.append(public_instance)
