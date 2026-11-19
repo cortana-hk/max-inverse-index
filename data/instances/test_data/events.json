@@ -17785,5 +17785,40 @@
     "action": "sell",
     "price": 471.24,
     "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:02:15+00:00",
+    "symbol": "STX",
+    "action": "sell",
+    "price": 547.95,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:02:15+00:00",
+    "symbol": "FORM",
+    "action": "sell",
+    "price": 85.31,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:02:15+00:00",
+    "symbol": "AMAT",
+    "action": "sell",
+    "price": 356.74,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:02:15+00:00",
+    "symbol": "MU",
+    "action": "sell",
+    "price": 725.68,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-19T16:02:15+00:00",
+    "symbol": "AXTI",
+    "action": "sell",
+    "price": 35.87,
+    "currency": "USD"
   }
 ]
