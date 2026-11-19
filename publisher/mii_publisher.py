@@ -284,6 +284,74 @@ def advance_state(state, positions, equity_usd, observed_at, cash_flows=None):
     return next_state, files
 
 
+def read_asset_history(trade):
+    end_date = datetime.now(NEW_YORK).date().isoformat()
+    result = trade.get_analytics_asset(start_date='2000-01-01', end_date=end_date) or {}
+    records = []
+    for item in result.get('history', []):
+        asset = _finite(item['asset'], '历史净资产')
+        if asset <= 0:
+            continue
+        timestamp = datetime.fromtimestamp(item['date'] / 1000, timezone.utc).isoformat(timespec='seconds')
+        records.append({
+            'time': timestamp,
+            'asset': asset,
+            'amount_usd': _finite(item.get('deposit', 0), '历史入金') - _finite(item.get('withdrawal', 0), '历史出金'),
+        })
+    return sorted(records, key=lambda record: _timestamp(record['time']))
+
+
+def backfill_state_from_assets(state, records):
+    if not records:
+        return copy.deepcopy(state)
+    rebuilt = {}
+    for record in sorted(records, key=lambda item: _timestamp(item['time'])):
+        amount = _finite(record.get('amount_usd', 0), '历史出入金')
+        flows = []
+        if amount:
+            flows = [{
+                'id': f"tiger-asset-{record['time']}", 'time': record['time'], 'amount_usd': amount,
+            }]
+        rebuilt, _ = advance_state(rebuilt, [], record['asset'], record['time'], flows)
+
+    last_asset_time = _timestamp(rebuilt['history'][-1]['time'])
+    live_points = [point for point in state.get('history', []) if _timestamp(point['time']) > last_asset_time]
+    if live_points:
+        first_live_index = _finite(live_points[0]['mii_index'], '盘中指数点位')
+        scale = rebuilt['mii_index'] / first_live_index
+        base_nav = rebuilt['nav']
+        for point in live_points:
+            old_index = _finite(point['mii_index'], '盘中指数点位')
+            new_index = old_index * scale
+            rebuilt['nav'] = base_nav * first_live_index / old_index
+            rebuilt['history'].append({
+                'time': point['time'],
+                'mii_index': round(new_index, 4),
+                'total_return_pct': _public_return(new_index / 100.0 - 1.0),
+                'day_return_pct': None,
+            })
+            rebuilt['daily_nav'][_timestamp(point['time']).astimezone(NEW_YORK).date().isoformat()] = rebuilt['nav']
+        rebuilt['mii_index'] = _finite(rebuilt['history'][-1]['mii_index'], '最新指数点位')
+
+    rebuilt['positions'] = copy.deepcopy(state.get('positions', []))
+    rebuilt['events'] = copy.deepcopy(state.get('events', []))
+    rebuilt['processed_cash_flows'] = sorted(set(rebuilt.get('processed_cash_flows', [])) | set(state.get('processed_cash_flows', [])))
+    for key in ('fixture_cursor',):
+        if key in state:
+            rebuilt[key] = state[key]
+    _refresh_session_day_changes(rebuilt['history'])
+    latest_point = rebuilt['history'][-1]
+    rebuilt['latest'] = {
+        'schema_version': 1,
+        'generated_at': latest_point['time'],
+        'mii_index': latest_point['mii_index'],
+        'total_return_pct': latest_point['total_return_pct'],
+        'day_return_pct': latest_point['day_return_pct'],
+        'holdings': copy.deepcopy(state.get('latest', {}).get('holdings', [])),
+    }
+    return rebuilt
+
+
 def read_fill_events(path):
     """从本地成交记录回填全部订单，仅输出时间、方向、价格和币种。"""
     path = Path(path)
@@ -331,6 +399,67 @@ def read_fill_events(path):
         'currency': 'HKD' if order['symbol'].isdigit() else 'USD',
     } for order in orders.values()]
     return sorted(events, key=lambda event: event['time'])
+
+
+def merge_order_events(*event_groups):
+    merged = {}
+    for events in event_groups:
+        for event in events:
+            key = (
+                event['time'], event['symbol'], event['action'],
+                round(float(event['price']), 4), event['currency'],
+            )
+            merged[key] = event
+    return sorted(merged.values(), key=lambda event: event['time'])
+
+
+def read_broker_order_events(trade, start_time=None, page_size=100):
+    events = []
+    seen_order_ids = set()
+    end_time = None
+    for _ in range(1000):
+        batch = trade.get_orders(limit=page_size, start_time=start_time, end_time=end_time) or []
+        if not batch:
+            break
+        for order in batch:
+            order_id = str(getattr(order, 'id', None) or getattr(order, 'order_id', ''))
+            if order_id in seen_order_ids:
+                continue
+            seen_order_ids.add(order_id)
+            status = str(getattr(order, 'status', getattr(order, '_status', ''))).split('.')[-1].upper()
+            if status not in {'FILLED', 'PARTIALLY_FILLED', 'PARTIAL_FILLED'}:
+                continue
+            price = _finite(getattr(order, 'avg_fill_price', None), '订单成交均价')
+            if price <= 0:
+                continue
+            contract = order.contract
+            symbol = str(contract.symbol).upper()
+            action = str(order.action).split('.')[-1].upper()
+            timestamp = datetime.fromtimestamp(order.order_time / 1000, timezone.utc).isoformat(timespec='seconds')
+            events.append({
+                'time': timestamp,
+                'symbol': symbol,
+                'action': 'sell' if action.startswith('SELL') else 'buy',
+                'price': round(price, 4),
+                'currency': str(getattr(contract, 'currency', None) or ('HKD' if symbol.isdigit() else 'USD')).upper(),
+            })
+        if len(batch) < page_size:
+            break
+        end_time = min(order.order_time for order in batch) - 1
+    return merge_order_events(events)
+
+
+def sync_broker_orders(trade, private_dir):
+    cache_path = Path(private_dir) / 'broker_orders.json'
+    cache = _load_json(cache_path, {'last_time': 0, 'events': []})
+    start_time = int(cache.get('last_time', 0)) + 1 if cache.get('last_time') else None
+    new_events = read_broker_order_events(trade, start_time=start_time)
+    events = merge_order_events(cache.get('events', []), new_events)
+    last_time = max([int(cache.get('last_time', 0))] + [
+        int(_timestamp(event['time']).timestamp() * 1000) for event in new_events
+    ])
+    _atomic_json(cache_path, {'last_time': last_time, 'events': events})
+    return events
 
 
 def extract_net_liquidation(assets):
@@ -570,6 +699,7 @@ def run_instance(instance, args, registry):
     private_dir, fills_path = initialise_instance_resources(
         instance, tiger_config=tiger_config, fills_file=args.fills_file)
     state = _load_json(private_dir / 'private_state.json', {})
+    broker_events = []
     source = instance.get('source', 'tiger')
     if source == 'fixture':
         positions, equity, fixture_cursor = load_fixture_snapshot(
@@ -579,6 +709,15 @@ def run_instance(instance, args, registry):
         trade = create_trade_client(_instance_path(tiger_config))
         positions, equity = collect_account(trade)
         fixture_cursor = None
+        try:
+            state = backfill_state_from_assets(state, read_asset_history(trade))
+        except Exception as exc:
+            print(f"MII[{instance_id}] 历史资产补齐失败，保留现有历史：{type(exc).__name__}", file=sys.stderr)
+        try:
+            broker_events = sync_broker_orders(trade, private_dir)
+        except Exception as exc:
+            print(f"MII[{instance_id}] 历史订单补齐失败，使用本地记录：{type(exc).__name__}", file=sys.stderr)
+            broker_events = _load_json(private_dir / 'broker_orders.json', {'events': []}).get('events', [])
     else:
         raise ValueError(f'未知实例数据源: {source}')
     observed_at = datetime.now(timezone.utc)
@@ -587,8 +726,8 @@ def run_instance(instance, args, registry):
     if fixture_cursor is not None:
         next_state['fixture_cursor'] = fixture_cursor
     fill_events = read_fill_events(fills_path)
-    if fill_events:
-        files['events'] = fill_events
+    if broker_events or fill_events:
+        files['events'] = merge_order_events(broker_events, fill_events)
     assert_public_payload_safe(files)
 
     if args.dry_run:

@@ -16,17 +16,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from publisher.mii_publisher import (
     advance_state,
     assert_public_payload_safe,
+    backfill_state_from_assets,
     collect_account,
     extract_net_liquidation,
     initialise_instance_resources,
     load_fixture_snapshot,
     load_instances,
+    merge_order_events,
     public_registry,
     publish_files,
+    read_asset_history,
+    read_broker_order_events,
     read_fill_events,
     run_instance,
     select_instances,
     session_start,
+    sync_broker_orders,
 )
 
 
@@ -227,6 +232,82 @@ class FillEventTests(unittest.TestCase):
 
     def test_missing_fill_file_returns_empty_history(self):
         self.assertEqual(read_fill_events(Path('/unlikely/mii-missing-fills.jsonl')), [])
+
+
+class HistoryBackfillTests(unittest.TestCase):
+    def test_asset_history_is_sorted_and_typed(self):
+        trade = SimpleNamespace(get_analytics_asset=lambda **kwargs: {'history': [
+            {'date': 1762560000000, 'asset': 1100, 'deposit': 100, 'withdrawal': 0},
+            {'date': 1762300800000, 'asset': 1000, 'deposit': 0, 'withdrawal': 0},
+            {'date': 1762214400000, 'asset': 0, 'deposit': 0, 'withdrawal': 0},
+        ]})
+        records = read_asset_history(trade)
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0]['asset'], 1000)
+        self.assertEqual(records[0]['time'], '2025-11-05T00:00:00+00:00')
+        self.assertEqual(records[1]['amount_usd'], 100)
+
+    def test_asset_backfill_prepends_history_and_preserves_live_returns(self):
+        state, _ = advance_state({}, [], 2000, '2025-11-04T12:00:00+00:00')
+        state, _ = advance_state(state, [], 2200, '2025-11-04T13:00:00+00:00')
+        records = [
+            {'time': '2025-11-01T00:00:00+00:00', 'asset': 1000, 'amount_usd': 0},
+            {'time': '2025-11-02T00:00:00+00:00', 'asset': 1100, 'amount_usd': 0},
+            {'time': '2025-11-03T00:00:00+00:00', 'asset': 900, 'amount_usd': 0},
+        ]
+        state = backfill_state_from_assets(state, records)
+        self.assertEqual(len(state['history']), 5)
+        self.assertEqual(state['history'][0]['mii_index'], 100.0)
+        self.assertEqual(state['history'][2]['mii_index'], 106.3636)
+        self.assertEqual(state['history'][3]['mii_index'], 106.3636)
+        self.assertEqual(state['history'][4]['mii_index'], 95.7273)
+
+    def test_broker_orders_are_paginated_and_sanitised(self):
+        orders = [
+            SimpleNamespace(id=index + 100, order_id=0, order_time=1762300800000 + index * 1000,
+                            contract=SimpleNamespace(symbol='AAPL', currency='USD'),
+                            action='BUY' if index % 2 else 'SELL', avg_fill_price=100 + index,
+                            status='FILLED')
+            for index in range(3)
+        ]
+        class FakeTrade:
+            def get_orders(self, **kwargs):
+                selected = [order for order in orders if kwargs.get('end_time') is None or order.order_time <= kwargs['end_time']]
+                selected.sort(key=lambda order: order.order_time, reverse=True)
+                return selected[:kwargs['limit']]
+        events = read_broker_order_events(FakeTrade(), page_size=2)
+        self.assertEqual(len(events), 3)
+        self.assertNotIn('order_id', json.dumps(events))
+        self.assertNotIn('quantity', json.dumps(events))
+        self.assertEqual(events[0]['action'], 'sell')
+
+    def test_broker_order_cache_is_incremental(self):
+        first = SimpleNamespace(order_id=1, order_time=1762300800000,
+                                contract=SimpleNamespace(symbol='AAPL', currency='USD'),
+                                action='BUY', avg_fill_price=100, status='FILLED')
+        class FakeTrade:
+            def __init__(self):
+                self.orders = [first]
+            def get_orders(self, **kwargs):
+                start = kwargs.get('start_time') or 0
+                return [order for order in self.orders if order.order_time >= start]
+        trade = FakeTrade()
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory)
+            initial = sync_broker_orders(trade, private)
+            second_order = SimpleNamespace(order_id=2, order_time=1762300801000,
+                                           contract=SimpleNamespace(symbol='TSLA', currency='USD'),
+                                           action='SELL', avg_fill_price=200, status='FILLED')
+            trade.orders.append(second_order)
+            updated = sync_broker_orders(trade, private)
+        self.assertEqual(len(initial), 1)
+        self.assertEqual(len(updated), 2)
+        self.assertEqual(updated[-1]['symbol'], 'TSLA')
+
+    def test_order_merge_deduplicates_and_sorts(self):
+        event = {'time': '2025-11-01T00:00:00+00:00', 'symbol': 'AAPL', 'action': 'buy', 'price': 100, 'currency': 'USD'}
+        merged = merge_order_events([event], [event])
+        self.assertEqual(merged, [event])
 
 
 class AccountAdapterTests(unittest.TestCase):
