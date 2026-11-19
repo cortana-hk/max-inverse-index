@@ -28,7 +28,7 @@ MII 是与账户收益反向联动的个人指数，支持多个互相隔离的�
 | Tiger 配置 | 实例的 `tiger_config` 指向的目录 |
 | 成交记录 | 实例的 `fills_file` 指向的文件 |
 
-当前只有 `test_data` 实例。它沿用原账号的只读 Tiger 配置 `../TIGER/config` 和成交记录 `../TIGER/data/fills.jsonl`，历史数据已整体保留并改名。旧公开默认路径继续指向默认实例。
+当前只有 `test_data` 实例。它沿用原账号的只读 Tiger 配置 `../TIGER/config` 和成交记录 `../TIGER/data/fills.jsonl`，历史数据已整体保留并改名。公开数据只保存在 `data/instances/<实例ID>/`，根目录不再生成镜像副本。
 
 ## 添加第二个真实 Tiger 账号
 

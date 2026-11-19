@@ -401,15 +401,13 @@ def _git(repo, *args, check=True):
 
 
 def publish_files(repo, files, push=True, instance_id=None, registry=None):
-    """发布单个实例；默认实例保留旧路径兼容，绝不覆盖其他实例。"""
+    """发布单个实例，公开数据只写入该实例自己的目录。"""
     if not instance_id or not INSTANCE_ID_PATTERN.fullmatch(instance_id):
         raise ValueError('实例 ID 无效')
     repo = Path(repo).resolve()
     assert_public_payload_safe(files)
     for name in PUBLIC_FILENAMES:
         _atomic_json(repo / 'data' / 'instances' / instance_id / f'{name}.json', files[name])
-        if registry and instance_id == registry['default_instance']:
-            _atomic_json(repo / 'data' / f'{name}.json', files[name])
     if registry is not None:
         _atomic_json(repo / 'data' / 'instances.json', registry)
     _git(repo, 'add', '--', 'data')

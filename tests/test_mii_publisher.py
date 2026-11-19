@@ -415,8 +415,7 @@ class PublicFileTests(unittest.TestCase):
             other['latest']['mii_index'] = 101.0
             publish_files(repo, other, push=False, instance_id='growth', registry=registry)
 
-            self.assertEqual((repo / 'data' / 'latest.json').read_text(encoding='utf-8'),
-                             (repo / 'data' / 'instances' / 'test_data' / 'latest.json').read_text(encoding='utf-8'))
+            self.assertFalse((repo / 'data' / 'latest.json').exists())
             self.assertEqual(json.loads((repo / 'data' / 'instances' / 'test_data' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 100.0)
             self.assertEqual(json.loads((repo / 'data' / 'instances' / 'growth' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 101.0)
             self.assertEqual(json.loads((repo / 'data' / 'instances.json').read_text(encoding='utf-8'))['default_instance'], 'test_data')
@@ -437,7 +436,8 @@ class PublicFileTests(unittest.TestCase):
             count = subprocess.check_output(
                 ['git', 'rev-list', '--count', 'HEAD'], cwd=repo, text=True).strip()
             self.assertEqual(count, '1')
-            self.assertTrue((repo / 'data' / 'latest.json').is_file())
+            self.assertTrue((repo / 'data' / 'instances' / 'test_data' / 'latest.json').is_file())
+            self.assertFalse((repo / 'data' / 'latest.json').exists())
             subprocess.run(['git', 'status', '--porcelain'], cwd=repo, check=True)
 
 
