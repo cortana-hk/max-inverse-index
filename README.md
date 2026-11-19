@@ -35,14 +35,13 @@ MII 是与账户收益反向联动的个人指数，支持多个互相隔离的�
 
 ### 1. 创建独立目录
 
-在 `private/instances/` 下创建账号实例目录，例如：
+在 `private/instances/` 下创建账号实例的凭证目录，例如：
 
 ```text
 private/instances/account-2-real/config/
-private/instances/account-2-real/fills.jsonl
 ```
 
-把该账号的 `tiger_openapi_config.properties` 和 token 配置放进 `config/`。`private/` 不会进入 Git。
+把该账号的 `tiger_openapi_config.properties` 和 token 配置放进 `config/`。`private/` 不会进入 Git。首次 dry-run 或发布时，程序会自动创建实例目录、空白 `fills.jsonl`、`cash_flows.json` 和 `private_state.json`；不需要手动创建这些文件。程序只会初始化对应实例自己的目录，不会写入外部路径。
 
 ### 2. 注册实例
 

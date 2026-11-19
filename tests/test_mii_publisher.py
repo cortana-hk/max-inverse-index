@@ -18,6 +18,7 @@ from publisher.mii_publisher import (
     assert_public_payload_safe,
     collect_account,
     extract_net_liquidation,
+    initialise_instance_resources,
     load_fixture_snapshot,
     load_instances,
     public_registry,
@@ -295,6 +296,30 @@ class InstanceTests(unittest.TestCase):
         self.assertNotIn('tiger_config', text)
         self.assertNotIn('fills_file', text)
         self.assertNotIn('/private/', text)
+
+    def test_instance_resources_are_initialised_only_inside_instance_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory) / 'private'
+            instance_root = private / 'instances' / 'account-2-real'
+            instance = {
+                'id': 'account-2-real',
+                'tiger_config': str(instance_root / 'config'),
+                'fills_file': str(instance_root / 'fills.jsonl'),
+            }
+            with patch('publisher.mii_publisher.PRIVATE_DIR', private):
+                private_dir, fills_path = initialise_instance_resources(instance)
+            self.assertTrue((instance_root / 'config').is_dir())
+            self.assertTrue(fills_path.is_file())
+            self.assertEqual(fills_path.read_text(encoding='utf-8'), '')
+            self.assertEqual(json.loads((private_dir / 'cash_flows.json').read_text(encoding='utf-8')), [])
+            self.assertEqual(json.loads((private_dir / 'private_state.json').read_text(encoding='utf-8')), {})
+
+            external = Path(directory) / 'external'
+            instance['tiger_config'] = str(external / 'config')
+            instance['fills_file'] = str(external / 'fills.jsonl')
+            with patch('publisher.mii_publisher.PRIVATE_DIR', private):
+                initialise_instance_resources(instance)
+            self.assertFalse(external.exists())
 
     def test_fixture_instances_are_explicitly_marked_as_tests(self):
         config = self.config()

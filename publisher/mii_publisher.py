@@ -540,10 +540,35 @@ def load_fixture_snapshot(path, cursor):
     return positions, snapshot['equity'], index + 1
 
 
+def initialise_instance_resources(instance, tiger_config=None, fills_file=None):
+    instance_id = instance['id']
+    if not INSTANCE_ID_PATTERN.fullmatch(instance_id):
+        raise ValueError('实例 ID 无效')
+    private_dir = PRIVATE_DIR / 'instances' / instance_id
+    private_dir.mkdir(parents=True, exist_ok=True)
+    for filename, default in (('private_state.json', {}), ('cash_flows.json', [])):
+        path = private_dir / filename
+        if not path.exists():
+            _atomic_json(path, default)
+
+    instance_root = private_dir.resolve()
+    config_value = tiger_config or instance.get('tiger_config')
+    if config_value:
+        config_path = _instance_path(config_value).resolve()
+        if config_path.is_relative_to(instance_root):
+            config_path.mkdir(parents=True, exist_ok=True)
+    resolved_fills = _instance_path(fills_file or instance['fills_file']).resolve()
+    if resolved_fills.is_relative_to(instance_root):
+        resolved_fills.parent.mkdir(parents=True, exist_ok=True)
+        resolved_fills.touch(exist_ok=True)
+    return private_dir, resolved_fills
+
+
 def run_instance(instance, args, registry):
     instance_id = instance['id']
-    private_dir = PRIVATE_DIR / 'instances' / instance_id
-    fills_file = args.fills_file or instance['fills_file']
+    tiger_config = args.tiger_config or instance.get('tiger_config')
+    private_dir, fills_path = initialise_instance_resources(
+        instance, tiger_config=tiger_config, fills_file=args.fills_file)
     state = _load_json(private_dir / 'private_state.json', {})
     source = instance.get('source', 'tiger')
     if source == 'fixture':
@@ -561,7 +586,7 @@ def run_instance(instance, args, registry):
     next_state, files = advance_state(state, positions, equity, observed_at, flows)
     if fixture_cursor is not None:
         next_state['fixture_cursor'] = fixture_cursor
-    fill_events = read_fill_events(_instance_path(fills_file))
+    fill_events = read_fill_events(fills_path)
     if fill_events:
         files['events'] = fill_events
     assert_public_payload_safe(files)
