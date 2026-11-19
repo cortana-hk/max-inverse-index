@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Max Inverse Index（MII）——看看 Max 又买了啥。公开持仓比例、变化与近实时收益，不公开金额和股数。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://raw.githubusercontent.com; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>Max Inverse Index — 看看 Max 又买了啥</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="MII 首页">
+      <span class="brand-mark">MII</span>
+      <span class="brand-name">Max Inverse Index</span>
+    </a>
+    <div class="live-pill" id="live-pill" data-state="loading">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span id="live-label">连接数据中</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow">THE PORTFOLIO, IN PUBLIC.</p>
+        <h1 id="page-title">Max Inverse<br><span>Index.</span></h1>
+        <p class="subtitle">看看 Max 又买了啥<span class="cursor" aria-hidden="true">_</span></p>
+      </div>
+      <div class="hero-note">
+        <p>一个公开、克制、近乎实时的个人持仓观察站。</p>
+        <p class="privacy-note">只展示比例 <span>·</span> 隐藏金额与股数</p>
+        <p class="updated" id="updated-at">等待第一个有效快照</p>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="收益概览">
+      <article class="metric-card metric-primary">
+        <div class="metric-heading"><span>累计收益率</span><span class="metric-index">01</span></div>
+        <p class="metric-value neutral" id="total-return">—</p>
+        <p class="metric-caption">自首次有效快照起算</p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-heading"><span>今日收益率</span><span class="metric-index">02</span></div>
+        <p class="metric-value neutral" id="day-return">—</p>
+        <p class="metric-caption">香港时间 · 对比上一自然日最后净值</p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-heading"><span>MII 指数</span><span class="metric-index">03</span></div>
+        <p class="metric-value" id="mii-index">100.00</p>
+        <p class="metric-caption">初始基点 100 · 非可交易产品</p>
+      </article>
+    </section>
+
+    <section class="panel chart-panel" aria-labelledby="chart-title">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">PERFORMANCE</p>
+          <h2 id="chart-title">指数走势</h2>
+        </div>
+        <span class="panel-meta" id="point-count">0 个数据点</span>
+      </div>
+      <div class="chart-wrap" id="chart-wrap">
+        <svg id="performance-chart" viewBox="0 0 1000 280" preserveAspectRatio="none" role="img" aria-label="MII 指数历史走势"></svg>
+        <div class="empty-state" id="chart-empty">
+          <span class="empty-line"></span>
+          <p>第一笔净值出现后，曲线会从这里开始。</p>
+        </div>
+      </div>
+      <div class="chart-axis" id="chart-axis" aria-hidden="true"></div>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="panel holdings-panel" aria-labelledby="holdings-title">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">CURRENT EXPOSURE</p>
+            <h2 id="holdings-title">现在拿着什么</h2>
+          </div>
+          <span class="panel-meta" id="holding-count">—</span>
+        </div>
+        <div class="holdings-head" aria-hidden="true">
+          <span>标的</span><span>仓位权重</span><span>浮动盈亏</span>
+        </div>
+        <div id="holdings-list" class="holdings-list" aria-live="polite">
+          <p class="placeholder">等待持仓数据…</p>
+        </div>
+      </section>
+
+      <section class="panel events-panel" aria-labelledby="events-title">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">POSITION LOG</p>
+            <h2 id="events-title">Max 又买了啥</h2>
+          </div>
+          <span class="panel-meta">最近变化</span>
+        </div>
+        <div id="events-list" class="events-list" aria-live="polite">
+          <p class="placeholder">还没有持仓变化记录。</p>
+        </div>
+      </section>
+    </div>
+
+    <section class="methodology" aria-label="数据说明">
+      <span class="methodology-label">HOW IT WORKS</span>
+      <p>本地只读服务采集 Tiger 账户，脱敏后发布 JSON。网页每 60 秒自动刷新；收益率按基金份额法计算，显式记录的出入金不会被当成投资盈亏。</p>
+    </section>
+  </main>
+
+  <footer>
+    <div><span class="footer-brand">MII</span><span>Built for Max. Watched by everyone.</span></div>
+    <p>MII 是个人展示品牌，不是可交易金融产品。数据可能延迟，仅供记录，不构成投资建议。</p>
+  </footer>
+</body>
+</html>
