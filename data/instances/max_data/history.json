@@ -3570,9 +3570,15 @@
     "day_return_pct": -0.204
   },
   {
+    "time": "2026-11-19T18:07:47+00:00",
     "mii_index": 372.1378,
     "total_return_pct": 272.1378,
-    "day_return_pct": -0.1431,
-    "time": "2026-11-19T18:07:47+00:00"
+    "day_return_pct": -0.1431
+  },
+  {
+    "mii_index": 372.3114,
+    "total_return_pct": 272.3114,
+    "day_return_pct": -0.0965,
+    "time": "2026-11-19T18:08:54+00:00"
   }
 ]
