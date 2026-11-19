@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-19T12:27:57+00:00",
-  "mii_index": 99.9283,
-  "total_return_pct": -0.0717,
+  "generated_at": "2026-11-19T12:29:00+00:00",
+  "mii_index": 99.9317,
+  "total_return_pct": -0.0683,
   "day_return_pct": null,
   "holdings": [
     {
       "symbol": "AAPL",
       "market": "US",
-      "weight_pct": 41.9909,
+      "weight_pct": 41.9871,
       "unrealized_pnl_pct": 2.75
     },
     {
       "symbol": "MA",
       "market": "US",
-      "weight_pct": 2.5396,
+      "weight_pct": 2.5395,
       "unrealized_pnl_pct": -3.91
     },
     {
@@ -26,7 +26,7 @@
     {
       "symbol": "TMO",
       "market": "US",
-      "weight_pct": 1.2844,
+      "weight_pct": 1.2843,
       "unrealized_pnl_pct": 1.69
     },
     {
@@ -38,13 +38,13 @@
     {
       "symbol": "TCOM",
       "market": "US",
-      "weight_pct": 1.1679,
+      "weight_pct": 1.1678,
       "unrealized_pnl_pct": -0.7
     },
     {
       "symbol": "JNJ",
       "market": "US",
-      "weight_pct": 1.0262,
+      "weight_pct": 1.0261,
       "unrealized_pnl_pct": 4.11
     },
     {
@@ -56,7 +56,7 @@
     {
       "symbol": "PYPL",
       "market": "US",
-      "weight_pct": 1.0107,
+      "weight_pct": 1.0106,
       "unrealized_pnl_pct": -4.42
     },
     {
@@ -68,14 +68,14 @@
     {
       "symbol": "BMY",
       "market": "US",
-      "weight_pct": 0.8535,
-      "unrealized_pnl_pct": -4.66
+      "weight_pct": 0.8548,
+      "unrealized_pnl_pct": -4.51
     },
     {
       "symbol": "WMT",
       "market": "US",
-      "weight_pct": 0.5215,
-      "unrealized_pnl_pct": 8.99
+      "weight_pct": 0.5246,
+      "unrealized_pnl_pct": 9.63
     },
     {
       "symbol": "ABNB",
@@ -98,8 +98,8 @@
     {
       "symbol": "AXTI",
       "market": "US",
-      "weight_pct": 0.2382,
-      "unrealized_pnl_pct": 6.77
+      "weight_pct": 0.239,
+      "unrealized_pnl_pct": 7.14
     },
     {
       "symbol": "GD",
@@ -116,26 +116,26 @@
     {
       "symbol": "AMAT",
       "market": "US",
-      "weight_pct": 0.1538,
-      "unrealized_pnl_pct": 4.24
+      "weight_pct": 0.1543,
+      "unrealized_pnl_pct": 4.52
     },
     {
       "symbol": "AMD",
       "market": "US",
-      "weight_pct": 0.1375,
-      "unrealized_pnl_pct": 6.38
+      "weight_pct": 0.1378,
+      "unrealized_pnl_pct": 6.59
     },
     {
       "symbol": "CRWD",
       "market": "US",
-      "weight_pct": 0.106,
-      "unrealized_pnl_pct": 7.89
+      "weight_pct": 0.1061,
+      "unrealized_pnl_pct": 7.95
     },
     {
       "symbol": "STX",
       "market": "US",
-      "weight_pct": 0.0919,
-      "unrealized_pnl_pct": 6.56
+      "weight_pct": 0.0917,
+      "unrealized_pnl_pct": 6.36
     }
   ]
 }
