@@ -7,6 +7,8 @@ const DISPLAY_ZONE = 'America/New_York';
 const ACTION_LABELS = { buy: '买入', sell: '卖出', new: '新建', increase: '增持', reduce: '减持', close: '清仓' };
 let hasSuccessfulLoad = false;
 let cachedData = null;
+let currentInstance = 'max';
+let loadGeneration = 0;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -230,22 +232,58 @@ function renderAll() {
   renderChart(cachedData.history, baseline);
 }
 
-async function fetchJson(name) {
-  const response = await fetch(`${DATA_ROOT}/${name}.json?t=${Date.now()}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
-  return response.json();
+function baseDateStorageKey() {
+  return `mii-base-date:${currentInstance}`;
+}
+
+function restoreBaseDate() {
+  document.getElementById('base-date').value = '';
+  try {
+    document.getElementById('base-date').value = localStorage.getItem(baseDateStorageKey()) || '';
+  } catch (error) { /* storage is optional */ }
+}
+
+async function fetchJson(name, instanceId = currentInstance) {
+  const response = await fetch(`${DATA_ROOT}/instances/${instanceId}/${name}.json?t=${Date.now()}`, { cache: 'no-store' });
+  if (response.ok) return response.json();
+  if (instanceId !== 'max' || response.status !== 404) throw new Error(`${name}: HTTP ${response.status}`);
+  const legacy = await fetch(`${DATA_ROOT}/${name}.json?t=${Date.now()}`, { cache: 'no-store' });
+  if (!legacy.ok) throw new Error(`${name}: HTTP ${legacy.status}`);
+  return legacy.json();
+}
+
+async function fetchRegistry() {
+  try {
+    const response = await fetch(`${DATA_ROOT}/instances.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('registry unavailable');
+    const registry = await response.json();
+    if (!Array.isArray(registry.instances) || !registry.instances.length) throw new Error('invalid registry');
+    return registry;
+  } catch (error) {
+    return { default_instance: 'max', instances: [{ id: 'max', name: 'Max' }] };
+  }
+}
+
+function preferredInstance(registry) {
+  const available = new Set(registry.instances.map((instance) => instance.id));
+  const fromUrl = new URLSearchParams(window.location.search).get('instance');
+  if (available.has(fromUrl)) return fromUrl;
+  try {
+    const saved = localStorage.getItem('mii-instance');
+    if (available.has(saved)) return saved;
+  } catch (error) { /* storage is optional */ }
+  return available.has(registry.default_instance) ? registry.default_instance : registry.instances[0].id;
 }
 
 async function refresh() {
+  const generation = loadGeneration;
+  const instanceId = currentInstance;
   try {
-    const [latest, history, events] = await Promise.all([fetchJson('latest'), fetchJson('history'), fetchJson('events')]);
+    const [latest, history, events] = await Promise.all([
+      fetchJson('latest', instanceId), fetchJson('history', instanceId), fetchJson('events', instanceId),
+    ]);
+    if (generation !== loadGeneration) return;
     validatePayload(latest, history, events);
-    if (!hasSuccessfulLoad) {
-      try {
-        const savedDate = localStorage.getItem('mii-base-date');
-        if (savedDate) document.getElementById('base-date').value = savedDate;
-      } catch (error) { /* storage is optional */ }
-    }
     cachedData = { latest, history, events };
     renderAll();
     document.getElementById('updated-at').textContent = `数据时间 ${formatTime(latest.generated_at)} ET · 每 60 秒检查更新`;
@@ -253,18 +291,51 @@ async function refresh() {
     hasSuccessfulLoad = true;
     document.getElementById('updated-at').dataset.timestamp = latest.generated_at;
   } catch (error) {
+    if (generation !== loadGeneration) return;
     console.warn('MII data refresh failed:', error.message);
     setStatus('error', hasSuccessfulLoad ? '刷新失败 · 展示上次数据' : '暂时无法读取数据');
     if (!hasSuccessfulLoad) document.getElementById('updated-at').textContent = '公开数据尚未就绪，请稍后刷新';
   }
 }
 
+function switchInstance(instanceId) {
+  currentInstance = instanceId;
+  loadGeneration += 1;
+  cachedData = null;
+  hasSuccessfulLoad = false;
+  document.getElementById('updated-at').dataset.timestamp = '';
+  document.getElementById('updated-at').textContent = '正在切换实例…';
+  setStatus('loading', '读取实例数据');
+  restoreBaseDate();
+  try { localStorage.setItem('mii-instance', instanceId); } catch (error) { /* storage is optional */ }
+  const url = new URL(window.location.href);
+  url.searchParams.set('instance', instanceId);
+  window.history.replaceState({}, '', url);
+  refresh();
+}
+
 document.getElementById('base-date').addEventListener('change', () => {
-  try { localStorage.setItem('mii-base-date', document.getElementById('base-date').value); } catch (error) { /* storage is optional */ }
+  try { localStorage.setItem(baseDateStorageKey(), document.getElementById('base-date').value); } catch (error) { /* storage is optional */ }
   renderAll();
 });
+document.getElementById('instance-select').addEventListener('change', (event) => switchInstance(event.target.value));
 
-refresh();
+async function initialise() {
+  const registry = await fetchRegistry();
+  const select = document.getElementById('instance-select');
+  select.replaceChildren();
+  registry.instances.forEach((instance) => {
+    const option = element('option', '', instance.name);
+    option.value = instance.id;
+    select.append(option);
+  });
+  currentInstance = preferredInstance(registry);
+  select.value = currentInstance;
+  restoreBaseDate();
+  refresh();
+}
+
+initialise();
 setInterval(refresh, REFRESH_MS);
 setInterval(() => {
   const timestamp = document.getElementById('updated-at').dataset.timestamp;

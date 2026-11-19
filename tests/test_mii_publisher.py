@@ -17,8 +17,12 @@ from publisher.mii_publisher import (
     assert_public_payload_safe,
     collect_account,
     extract_net_liquidation,
+    load_instances,
+    migrate_legacy_state,
+    public_registry,
     publish_files,
     read_fill_events,
+    select_instances,
     session_start,
 )
 
@@ -244,6 +248,66 @@ class AccountAdapterTests(unittest.TestCase):
         self.assertEqual(equity, 1000.0)
 
 
+class InstanceTests(unittest.TestCase):
+    def config(self):
+        return {
+            'default_instance': 'max',
+            'instances': [
+                {'id': 'max', 'name': 'Max', 'tiger_config': '/private/max', 'fills_file': '/private/max/fills', 'enabled': True},
+                {'id': 'growth', 'name': 'Growth', 'tiger_config': '/private/growth', 'fills_file': '/private/growth/fills', 'enabled': True},
+            ],
+        }
+
+    def test_instance_config_loads_and_selects_without_sharing_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'instances.json'
+            path.write_text(json.dumps(self.config()), encoding='utf-8')
+            config = load_instances(path)
+        self.assertEqual([item['id'] for item in select_instances(config)], ['max', 'growth'])
+        self.assertEqual([item['id'] for item in select_instances(config, 'growth')], ['growth'])
+        with self.assertRaises(ValueError):
+            select_instances(config, 'unknown')
+
+    def test_invalid_or_duplicate_instance_ids_are_rejected(self):
+        for instance_id in ('../secret', 'Max Account', 'account_1', ''):
+            config = self.config()
+            config['instances'][0]['id'] = instance_id
+            with self.subTest(instance_id=instance_id), self.assertRaises(ValueError):
+                public_registry(config)
+        config = self.config()
+        config['instances'][1]['id'] = 'max'
+        with self.assertRaises(ValueError):
+            public_registry(config)
+
+    def test_disabled_instance_is_not_publicly_registered(self):
+        config = self.config()
+        config['instances'][1]['enabled'] = False
+        registry = public_registry(config)
+        self.assertEqual([item['id'] for item in registry['instances']], ['max'])
+
+    def test_public_registry_contains_only_instance_id_and_name(self):
+        registry = public_registry(self.config())
+        self.assertEqual(registry['default_instance'], 'max')
+        self.assertEqual(registry['instances'][0], {'id': 'max', 'name': 'Max'})
+        text = json.dumps(registry)
+        self.assertNotIn('tiger_config', text)
+        self.assertNotIn('fills_file', text)
+        self.assertNotIn('/private/', text)
+
+    def test_legacy_state_is_copied_once_and_never_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'private_state.json').write_text('{"nav": 1.0}', encoding='utf-8')
+            (root / 'cash_flows.json').write_text('[{"id": "d1"}]', encoding='utf-8')
+            migrate_legacy_state(root)
+            migrated = root / 'instances' / 'max' / 'private_state.json'
+            self.assertEqual(json.loads(migrated.read_text(encoding='utf-8'))['nav'], 1.0)
+            self.assertTrue((root / 'private_state.json').exists())
+            migrated.write_text('{"nav": 1.2}', encoding='utf-8')
+            migrate_legacy_state(root)
+            self.assertEqual(json.loads(migrated.read_text(encoding='utf-8'))['nav'], 1.2)
+
+
 class PublicFileTests(unittest.TestCase):
     def files(self):
         latest = {
@@ -271,6 +335,31 @@ class PublicFileTests(unittest.TestCase):
         files['latest']['note'] = 'ghp_abcdefghijklmnopqrstuvwxyz123456'
         with self.assertRaises(ValueError):
             assert_public_payload_safe(files)
+
+    def test_second_instance_does_not_overwrite_default_instance_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(['git', 'init', '-b', 'main'], cwd=repo, check=True, capture_output=True)
+            subprocess.run(['git', 'config', 'user.name', 'MII Test'], cwd=repo, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'mii@example.invalid'], cwd=repo, check=True)
+            config = {
+                'default_instance': 'max',
+                'instances': [
+                    {'id': 'max', 'name': 'Max', 'tiger_config': '/max', 'fills_file': '/max/fills'},
+                    {'id': 'growth', 'name': 'Growth', 'tiger_config': '/growth', 'fills_file': '/growth/fills'},
+                ],
+            }
+            registry = public_registry(config)
+            publish_files(repo, self.files(), push=False, instance_id='max', registry=registry)
+            other = self.files()
+            other['latest']['mii_index'] = 101.0
+            publish_files(repo, other, push=False, instance_id='growth', registry=registry)
+
+            self.assertEqual((repo / 'data' / 'latest.json').read_text(encoding='utf-8'),
+                             (repo / 'data' / 'instances' / 'max' / 'latest.json').read_text(encoding='utf-8'))
+            self.assertEqual(json.loads((repo / 'data' / 'instances' / 'max' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 100.0)
+            self.assertEqual(json.loads((repo / 'data' / 'instances' / 'growth' / 'latest.json').read_text(encoding='utf-8'))['mii_index'], 101.0)
+            self.assertEqual(json.loads((repo / 'data' / 'instances.json').read_text(encoding='utf-8'))['default_instance'], 'max')
 
     def test_publish_files_commits_only_actual_changes(self):
         with tempfile.TemporaryDirectory() as directory:

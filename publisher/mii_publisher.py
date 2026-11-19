@@ -7,6 +7,7 @@ import math
 import os
 import re
 import subprocess
+import shutil
 import sys
 import tempfile
 import time
@@ -30,6 +31,7 @@ FORBIDDEN_PUBLIC_KEYS = {
     'equity', 'equity_usd', 'cash', 'net_liquidation', 'account', 'account_id',
     'order', 'order_id', 'tiger_id', 'token', 'private_key', 'units', 'nav',
 }
+INSTANCE_ID_PATTERN = re.compile(r'[a-z0-9][a-z0-9-]*\Z')
 SECRET_PATTERNS = (
     re.compile(r'github_pat_[A-Za-z0-9_]+'),
     re.compile(r'ghp_[A-Za-z0-9]+'),
@@ -398,12 +400,18 @@ def _git(repo, *args, check=True):
     return result
 
 
-def publish_files(repo, files, push=True):
-    """原子写入公开数据；仅实际变化产生提交，绝不 force push。"""
+def publish_files(repo, files, push=True, instance_id='max', registry=None):
+    """发布单个实例；默认实例保留旧路径兼容，绝不覆盖其他实例。"""
+    if not INSTANCE_ID_PATTERN.fullmatch(instance_id):
+        raise ValueError('实例 ID 无效')
     repo = Path(repo).resolve()
     assert_public_payload_safe(files)
     for name in PUBLIC_FILENAMES:
-        _atomic_json(repo / 'data' / f'{name}.json', files[name])
+        _atomic_json(repo / 'data' / 'instances' / instance_id / f'{name}.json', files[name])
+        if instance_id == 'max':
+            _atomic_json(repo / 'data' / f'{name}.json', files[name])
+    if registry is not None:
+        _atomic_json(repo / 'data' / 'instances.json', registry)
     _git(repo, 'add', '--', 'data')
     if _git(repo, 'diff', '--cached', '--quiet', '--', 'data', check=False).returncode == 0:
         return False
@@ -414,6 +422,62 @@ def publish_files(repo, files, push=True):
             _git(repo, 'pull', '--rebase', 'origin', 'main')
             _git(repo, 'push', 'origin', 'main')
     return True
+
+
+def load_instances(path):
+    config = _load_json(Path(path), None)
+    if not isinstance(config, dict):
+        raise ValueError('实例配置不存在或格式无效')
+    public_registry(config)
+    return config
+
+
+def public_registry(config):
+    instances = config.get('instances', [])
+    if not instances:
+        raise ValueError('至少需要一个账号实例')
+    public_instances = []
+    seen = set()
+    for instance in instances:
+        if not instance.get('enabled', True):
+            continue
+        instance_id = str(instance.get('id', ''))
+        name = str(instance.get('name', '')).strip()
+        if not INSTANCE_ID_PATTERN.fullmatch(instance_id):
+            raise ValueError(f'实例 ID 无效: {instance_id}')
+        if not name or instance_id in seen:
+            raise ValueError('实例名称不能为空且实例 ID 不能重复')
+        seen.add(instance_id)
+        public_instances.append({'id': instance_id, 'name': name})
+    default_instance = config.get('default_instance')
+    if default_instance not in seen:
+        raise ValueError('默认实例不存在')
+    return {
+        'schema_version': 1,
+        'default_instance': default_instance,
+        'instances': public_instances,
+    }
+
+
+def select_instances(config, requested=None):
+    public_registry(config)
+    enabled = [instance for instance in config['instances'] if instance.get('enabled', True)]
+    if requested is None:
+        return enabled
+    selected = [instance for instance in enabled if instance['id'] == requested]
+    if not selected:
+        raise ValueError(f'实例不存在或未启用: {requested}')
+    return selected
+
+
+def migrate_legacy_state(private_root=PRIVATE_DIR):
+    private_root = Path(private_root)
+    for filename in ('private_state.json', 'cash_flows.json'):
+        legacy = private_root / filename
+        migrated = private_root / 'instances' / 'max' / filename
+        if legacy.exists() and not migrated.exists():
+            migrated.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy, migrated)
 
 
 def _load_json(path, default):
@@ -455,36 +519,64 @@ def _instance_lock(path):
         stream.close()
 
 
-def run_once(args):
-    trade = create_trade_client(args.tiger_config)
+def _instance_path(value):
+    path = Path(value)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def run_instance(instance, args, registry):
+    instance_id = instance['id']
+    private_dir = PRIVATE_DIR / 'instances' / instance_id
+    tiger_config = args.tiger_config or instance['tiger_config']
+    fills_file = args.fills_file or instance['fills_file']
+    trade = create_trade_client(_instance_path(tiger_config))
     positions, equity = collect_account(trade)
     observed_at = datetime.now(timezone.utc)
-    private_dir = PRIVATE_DIR
     state = _load_json(private_dir / 'private_state.json', {})
     flows = _load_json(private_dir / 'cash_flows.json', [])
     next_state, files = advance_state(state, positions, equity, observed_at, flows)
-    fill_events = read_fill_events(Path(args.fills_file))
+    fill_events = read_fill_events(_instance_path(fills_file))
     if fill_events:
         files['events'] = fill_events
     assert_public_payload_safe(files)
 
     if args.dry_run:
         _atomic_json(private_dir / 'dry-run-public.json', files)
-        print(f"MII dry-run 成功：{len(files['latest']['holdings'])} 个持仓，公开预览已写入已忽略目录。")
+        print(f"MII[{instance_id}] dry-run 成功：{len(files['latest']['holdings'])} 个持仓。")
         return
-
-    publish_files(Path(args.repo), files, push=not args.no_push)
+    publish_files(Path(args.repo), files, push=not args.no_push, instance_id=instance_id, registry=registry)
     _save_private_json(private_dir / 'private_state.json', next_state)
-    print(f"MII 快照已发布：{observed_at.isoformat(timespec='seconds')}")
+    print(f"MII[{instance_id}] 快照已发布：{observed_at.isoformat(timespec='seconds')}")
+
+
+def run_once(args):
+    if args.instance is None and (args.tiger_config or args.fills_file):
+        raise ValueError('覆盖账号配置时必须同时指定 --instance')
+    config = load_instances(Path(args.instances_config))
+    migrate_legacy_state(PRIVATE_DIR)
+    selected = select_instances(config, args.instance)
+    registry = public_registry(config)
+    errors = []
+    for instance in selected:
+        try:
+            run_instance(instance, args, registry)
+        except Exception as exc:
+            errors.append(instance['id'])
+            print(f"MII[{instance['id']}] 本轮失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+    if len(errors) == len(selected):
+        raise RuntimeError('所有选中实例均发布失败')
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='发布 Max Inverse Index 脱敏持仓快照')
     parser.add_argument('--repo', default=str(PROJECT_ROOT))
-    parser.add_argument('--tiger-config', default=os.environ.get(
-        'MII_TIGER_CONFIG_DIR', str(PROJECT_ROOT.parent / 'TIGER' / 'config')))
-    parser.add_argument('--fills-file', default=os.environ.get(
-        'MII_FILLS_FILE', str(PROJECT_ROOT.parent / 'TIGER' / 'data' / 'fills.jsonl')))
+    parser.add_argument('--instances-config', default=os.environ.get(
+        'MII_INSTANCES_CONFIG', str(PRIVATE_DIR / 'instances.json')))
+    parser.add_argument('--instance', help='只运行指定实例；默认运行全部启用实例')
+    parser.add_argument('--tiger-config', default=os.environ.get('MII_TIGER_CONFIG_DIR'),
+                        help='覆盖指定实例的 Tiger 配置目录')
+    parser.add_argument('--fills-file', default=os.environ.get('MII_FILLS_FILE'),
+                        help='覆盖指定实例的成交记录文件')
     parser.add_argument('--once', action='store_true', help='只执行一次')
     parser.add_argument('--dry-run', action='store_true', help='只验证采集，不写公开仓库或收益基线')
     parser.add_argument('--no-push', action='store_true', help='只提交到本地公开仓库镜像')
