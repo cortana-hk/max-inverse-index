@@ -1,14 +1,11 @@
 {
   "schema_version": 1,
-  "default_instance": "test_data",
+  "default_instance": "max_data",
   "instances": [
     {
-      "id": "test_data",
-      "name": "test_data"
-    },
-    {
       "id": "max_data",
-      "name": "max_data"
+      "name": "max_data",
+      "start_date": "2026-09-01"
     }
   ]
 }
