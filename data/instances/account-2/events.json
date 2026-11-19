@@ -1,0 +1,16 @@
+[
+  {
+    "time": "2026-11-18T13:30:00+00:00",
+    "symbol": "TESTA",
+    "action": "buy",
+    "price": 90.0,
+    "currency": "USD"
+  },
+  {
+    "time": "2026-11-18T13:35:00+00:00",
+    "symbol": "TESTB",
+    "action": "buy",
+    "price": 75.0,
+    "currency": "USD"
+  }
+]

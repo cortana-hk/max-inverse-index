@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-19T14:15:06+00:00",
+  "mii_index": 100.0,
+  "total_return_pct": 0.0,
+  "day_return_pct": 0.0,
+  "holdings": [
+    {
+      "symbol": "TESTA",
+      "market": "US",
+      "currency": "USD",
+      "weight_pct": 50.0,
+      "average_cost": 90.0,
+      "current_price": 100.0,
+      "unrealized_pnl_pct": 11.1111
+    },
+    {
+      "symbol": "TESTB",
+      "market": "US",
+      "currency": "USD",
+      "weight_pct": 20.0,
+      "average_cost": 75.0,
+      "current_price": 80.0,
+      "unrealized_pnl_pct": 6.6667
+    }
+  ]
+}

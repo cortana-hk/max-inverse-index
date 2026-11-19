@@ -5,6 +5,11 @@
     {
       "id": "max",
       "name": "Max"
+    },
+    {
+      "id": "account-2",
+      "name": "账号2（测试）",
+      "test": true
     }
   ]
 }
