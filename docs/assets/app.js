@@ -11,6 +11,7 @@ let currentInstance = 'max_data';
 let currentInstanceStartDate = null;
 let instanceRegistry = null;
 let loadGeneration = 0;
+let chartRange = '1m';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -161,7 +162,11 @@ function renderChart(history, baseline) {
   svg.replaceChildren();
   axis.replaceChildren();
   const allPoints = validHistory(history);
-  const points = baseline ? allPoints.filter((point) => new Date(point.time) >= new Date(baseline.time)) : [];
+  const baselinePoints = baseline ? allPoints.filter((point) => new Date(point.time) >= new Date(baseline.time)) : [];
+  const rangeMilliseconds = { '24h': 24 * 60 * 60 * 1000, '7d': 7 * 24 * 60 * 60 * 1000, '1m': 30 * 24 * 60 * 60 * 1000 };
+  const latestTime = baselinePoints.length ? new Date(baselinePoints[baselinePoints.length - 1].time).getTime() : 0;
+  const cutoff = chartRange === 'all' ? null : latestTime - rangeMilliseconds[chartRange];
+  const points = cutoff === null ? baselinePoints : baselinePoints.filter((point) => new Date(point.time).getTime() >= cutoff);
   document.getElementById('point-count').textContent = `${points.length} 个数据点`;
   if (!points.length) { empty.hidden = false; return; }
   empty.hidden = true;
@@ -171,7 +176,10 @@ function renderChart(history, baseline) {
   const padding = Math.max((maximum - minimum) * 0.18, 1);
   minimum -= padding;
   maximum += padding;
-  const x = (index) => points.length === 1 ? 500 : index / (points.length - 1) * 1000;
+  const timestamps = points.map((point) => new Date(point.time).getTime());
+  const firstTime = timestamps[0];
+  const timeSpan = timestamps[timestamps.length - 1] - firstTime;
+  const x = (timestamp) => timeSpan === 0 ? 500 : (timestamp - firstTime) / timeSpan * 1000;
   const y = (value) => 204 - (value - minimum) / (maximum - minimum) * 188;
   const namespace = 'http://www.w3.org/2000/svg';
   const defs = document.createElementNS(namespace, 'defs');
@@ -191,7 +199,7 @@ function renderChart(history, baseline) {
     line.setAttribute('y1', String(lineY)); line.setAttribute('y2', String(lineY));
     line.setAttribute('class', 'chart-grid'); svg.append(line);
   });
-  const coordinates = points.map((point, index) => `${x(index)},${y(rebasedIndex(point.mii_index, baseline))}`);
+  const coordinates = points.map((point) => `${x(new Date(point.time).getTime())},${y(rebasedIndex(point.mii_index, baseline))}`);
   if (points.length > 1) {
     const area = document.createElementNS(namespace, 'polygon');
     area.setAttribute('points', `0,220 ${coordinates.join(' ')} 1000,220`);
@@ -200,7 +208,7 @@ function renderChart(history, baseline) {
   const line = document.createElementNS(namespace, 'polyline');
   line.setAttribute('points', coordinates.join(' ')); line.setAttribute('class', 'chart-line'); svg.append(line);
   const dot = document.createElementNS(namespace, 'circle');
-  dot.setAttribute('cx', String(x(points.length - 1)));
+  dot.setAttribute('cx', String(x(new Date(points[points.length - 1].time).getTime())));
   dot.setAttribute('cy', String(y(rebasedIndex(points[points.length - 1].mii_index, baseline))));
   dot.setAttribute('r', '4'); dot.setAttribute('class', 'chart-point'); svg.append(dot);
   [points[0].time, points[points.length - 1].time].forEach((time) => axis.append(element('span', '', formatTime(time))));
@@ -303,6 +311,13 @@ function switchInstance(instanceId) {
 }
 
 document.getElementById('instance-select').addEventListener('change', (event) => switchInstance(event.target.value));
+document.querySelectorAll('[data-range]').forEach((button) => {
+  button.addEventListener('click', () => {
+    chartRange = button.dataset.range;
+    document.querySelectorAll('[data-range]').forEach((item) => item.classList.toggle('active', item === button));
+    if (cachedData) renderChart(cachedData.history, baselinePoint(validHistory(cachedData.history)));
+  });
+});
 
 async function initialise() {
   const registry = await fetchRegistry();

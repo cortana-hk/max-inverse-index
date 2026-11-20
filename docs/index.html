@@ -7,8 +7,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://raw.githubusercontent.com; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#0b0d0c">
   <title>Max Inverse Index — 看看 Max 又买了啥</title>
-  <link rel="stylesheet" href="assets/style.css?v=11">
-  <script src="assets/app.js?v=10" defer></script>
+  <link rel="stylesheet" href="assets/style.css?v=12">
+  <script src="assets/app.js?v=11" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -60,7 +60,15 @@
           <p class="section-kicker">INVERSE PERFORMANCE</p>
           <h2 id="chart-title">MII 走势</h2>
         </div>
-        <span class="panel-meta" id="point-count">0 个数据点</span>
+        <div class="chart-toolbar">
+          <div class="chart-ranges" role="group" aria-label="走势图时间范围">
+            <button type="button" data-range="1m" class="active">近 1 月</button>
+            <button type="button" data-range="7d">近 7 日</button>
+            <button type="button" data-range="24h">近 24 时</button>
+            <button type="button" data-range="all">全部</button>
+          </div>
+          <span class="panel-meta" id="point-count">0 个数据点</span>
+        </div>
       </div>
       <div class="chart-wrap" id="chart-wrap">
         <svg id="performance-chart" viewBox="0 0 1000 220" preserveAspectRatio="none" role="img" aria-label="MII 反向指数历史走势"></svg>
