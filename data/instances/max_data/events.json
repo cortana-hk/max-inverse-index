@@ -5059,5 +5059,12 @@
     "action": "sell",
     "price": 384.0,
     "currency": "USD"
+  },
+  {
+    "time": "2026-11-20T01:18:32+00:00",
+    "symbol": "02865",
+    "action": "buy",
+    "price": 9.62,
+    "currency": "HKD"
   }
 ]
