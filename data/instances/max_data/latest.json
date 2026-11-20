@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-20T15:13:03+00:00",
-  "mii_index": 518.3889,
-  "total_return_pct": 418.3889,
-  "day_return_pct": 1.8551,
+  "generated_at": "2026-11-20T15:14:08+00:00",
+  "mii_index": 518.511,
+  "total_return_pct": 418.511,
+  "day_return_pct": 1.8791,
   "holdings": [
     {
       "symbol": "TSLA",
       "market": "US",
       "currency": "USD",
-      "weight_pct": -55.3433,
+      "weight_pct": -55.3625,
       "average_cost": 383.8895,
-      "current_price": 369.5235,
-      "unrealized_pnl_pct": 3.74
+      "current_price": 369.565,
+      "unrealized_pnl_pct": 3.73
     },
     {
       "symbol": "NVDA",
       "market": "US",
       "currency": "USD",
-      "weight_pct": 52.6308,
+      "weight_pct": 52.6188,
       "average_cost": 159.9228,
-      "current_price": 140.565,
-      "unrealized_pnl_pct": -12.1
+      "current_price": 140.5,
+      "unrealized_pnl_pct": -12.15
     },
     {
       "symbol": "SOXX",
       "market": "US",
       "currency": "USD",
-      "weight_pct": -11.9004,
+      "weight_pct": -11.896,
       "average_cost": 133.4283,
-      "current_price": 132.43,
-      "unrealized_pnl_pct": 0.75
+      "current_price": 132.35,
+      "unrealized_pnl_pct": 0.81
     }
   ]
 }
